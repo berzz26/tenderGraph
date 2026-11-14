@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/minio/minio-go/v7 v7.0.78
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.6
 )
 
 require (
