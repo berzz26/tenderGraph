@@ -28,7 +28,13 @@ async function get<T = any>(path: string, params: Record<string, any> = {}): Pro
   return (await res.json()) as T;
 }
 
-export const api = { get };
+async function post<T = any>(path: string, body: any): Promise<T> {
+  const res = await fetch(`/api/v1/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { let msg = `HTTP ${res.status}`; try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* ignore */ } throw new Error(msg); }
+  return await res.json() as T;
+}
+
+export const api = { get, post };
 
 // ---------- formatting ----------
 

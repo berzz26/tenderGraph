@@ -11,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"vyuha/api/internal/graph"
+	"vyuha/api/internal/intel"
 )
 
 // httpLog logs the raw server error without echoing it to the client.
@@ -20,10 +22,26 @@ func httpLog(err error) {
 
 // Server carries the pool and shared helpers.
 type Server struct {
-	Pool *pgxpool.Pool
+	Pool       *pgxpool.Pool
+	Intel      intel.Service
+	Review     intel.ReviewStore
+	Projection intel.ProjectionConsumer
+	Graph      *graph.Clients
 }
 
-func New(pool *pgxpool.Pool) *Server { return &Server{Pool: pool} }
+func New(pool *pgxpool.Pool, gc *graph.Clients) *Server {
+	s := &Server{Pool: pool, Graph: gc}
+	if gc != nil {
+		s.Intel.Graph = gc.HTTP
+	}
+	s.Intel.Pool = pool
+	s.Review.Pool = pool
+	s.Projection.Pool = pool
+	if gc != nil {
+		s.Projection.Graph = gc.HTTP
+	}
+	return s
+}
 
 // JSON writes a JSON response.
 func JSON(w http.ResponseWriter, status int, v any) {

@@ -8,7 +8,7 @@ network queries.
 The repository contains:
 
 - A Go 1.22 API in 'api/' using pgx/v5 and the standard HTTP library.
-- A React/Vite dashboard in 'frontend/' for the existing Vyuha views.
+- A React/Vite investigation workspace in 'frontend/' for bidder, company, tender and analyst-review workflows.
 - HydraDB integration in 'api/internal/graph/'.
 - Projection primitives in 'api/internal/projection/'.
 - The bounded synchronization engine in 'api/internal/ingest/'.
@@ -144,16 +144,16 @@ The Phase 2 vertical-slice tool remains available:
 go run ./cmd/graphproject -tender-id 16234
 ~~~
 
-## Existing dashboard
+## Investigation workspace
 
-Run the existing API:
+Run the API:
 
 ~~~sh
 cd api
 go run .
 ~~~
 
-Run the frontend:
+Run the frontend in development:
 
 ~~~sh
 cd frontend
@@ -161,8 +161,20 @@ npm install
 npm run dev
 ~~~
 
-The Vite development server proxies '/api' to port 8091. A production frontend
-build is served by the Go API when 'api/dist' exists.
+The Vite development server proxies '/api' to port 8091. Build output is served
+by the Go API when 'frontend/dist' exists:
+
+~~~sh
+cd frontend
+npm run build
+cd ../api
+go run .
+~~~
+
+The primary workspace routes are `#!/workspace`, `#!/bidder/<bid-id>`,
+`#!/company/<entity-id>`, `#!/tender/<external-tender-id>` and `#!/review`.
+The backend investigative API is documented in
+'docs/phase8/PHASE_8_REPORT.md'.
 
 ## Tests
 

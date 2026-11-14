@@ -9,6 +9,7 @@ import (
 
 	"vyuha/api/internal/cfg"
 	"vyuha/api/internal/db"
+	"vyuha/api/internal/graph"
 	"vyuha/api/internal/srv"
 )
 
@@ -25,7 +26,15 @@ func main() {
 	}
 	defer pool.Close()
 
-	s := srv.New(pool)
+	graphCfg := graph.LoadGraphConfig()
+	var graphClients *graph.Clients
+	if gc, err := graph.Open(graphCfg); err != nil {
+		log.Printf("HydraDB graph client unavailable: %v", err)
+	} else {
+		graphClients = gc
+		defer gc.Close(ctx)
+	}
+	s := srv.New(pool, graphClients)
 	mux := http.NewServeMux()
 
 	// Overview
@@ -54,11 +63,27 @@ func main() {
 	// Companies
 	mux.HandleFunc("GET /api/v1/companies", s.Companies)
 	mux.HandleFunc("GET /api/v1/companies/{entityId}", s.CompanyDetail)
+	mux.HandleFunc("GET /api/v1/companies/{entityId}/intelligence", s.CompanyIntelligence)
 	mux.HandleFunc("GET /api/v1/market-data/{entityId}", s.MarketHistory)
 
 	// Tender detail
 	mux.HandleFunc("GET /api/v1/tenders/{tenderId}", s.TenderDetail)
 	mux.HandleFunc("GET /api/v1/tenders/{tenderId}/files/{fileId}/download", s.TenderFileDownload)
+
+	// Investigation workspace APIs.
+	mux.HandleFunc("GET /api/v1/search", s.Search)
+	mux.HandleFunc("GET /api/v1/bidders/{bidID}", s.BidderProfile)
+	mux.HandleFunc("GET /api/v1/bidders/{bidID}/co-bidders", s.BidderCoBidders)
+	mux.HandleFunc("GET /api/v1/bidders/{bidID}/network", s.BidderNetwork)
+	mux.HandleFunc("GET /api/v1/networks/pair", s.BidderPair)
+	mux.HandleFunc("GET /api/v1/review/candidates", s.ReviewCandidates)
+	mux.HandleFunc("GET /api/v1/review/candidates/{candidateID}", s.ReviewCandidate)
+	mux.HandleFunc("GET /api/v1/review/candidates/{candidateID}/history", s.ReviewHistory)
+	mux.HandleFunc("POST /api/v1/review/candidates/{candidateID}/decision", s.ReviewDecision)
+	mux.HandleFunc("GET /api/v1/projection/status", s.ProjectionStatus)
+	mux.HandleFunc("GET /api/v1/projection/list", s.ProjectionList)
+	mux.HandleFunc("GET /api/v1/system/data-status", s.DataStatus)
+	mux.HandleFunc("GET /api/v1/system/health", s.WorkspaceHealth)
 
 	// Financial materiality and data quality
 	mux.HandleFunc("GET /api/v1/materiality", s.Materiality)
@@ -71,10 +96,19 @@ func main() {
 		fmt.Fprint(w, `{"status":"ok"}`)
 	})
 
-	// Static frontend build, when present.
-	if st := infoStat("dist"); st {
+	// Static frontend build, when present. Development runs from api/, while
+	// the Vite build is emitted in the sibling frontend/dist directory.
+	staticDir := "dist"
+	if !infoStat(staticDir) && infoStat("../frontend/dist") {
+		staticDir = "../frontend/dist"
+	}
+	if infoStat(staticDir) {
 		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "dist"+r.URL.Path)
+			path := staticDir + r.URL.Path
+			if _, err := os.Stat(path); err != nil || r.URL.Path == "/" {
+				path = staticDir + "/index.html"
+			}
+			http.ServeFile(w, r, path)
 		})
 	}
 
@@ -93,7 +127,7 @@ func infoStat(p string) bool {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -1,113 +1,18 @@
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
-import { api, str } from './api';
-import { useHashRoute } from './router';
-import Overview from './pages/Overview';
-import FinancialEvaluation from './pages/FinancialEvaluation';
-import AwardedContracts from './pages/AwardedContracts';
-import AwardIntelligence from './pages/AwardIntelligence';
-import EntityResolution from './pages/EntityResolution';
-import Materiality from './pages/Materiality';
-import Companies from './pages/Companies';
-import DataQuality from './pages/DataQuality';
-import TenderDetail from './pages/TenderDetail';
-import TenderDirectory from './pages/TenderDirectory';
+import { FormEvent, useEffect, useState } from 'react';
+import { api, fmtDate, fmtInt, str } from './api';
 
-const NAV = [
-  { id: 'overview', label: 'Overview', group: 'Workspace' },
-  { id: 'financial-evaluation', label: 'Financial Evaluation', group: 'Procurement' },
-  { id: 'awards', label: 'Awarded Contracts', group: 'Procurement' },
-  { id: 'award-intelligence', label: 'Award Intelligence', group: 'Procurement' },
-  { id: 'tender-detail', label: 'Tender Detail', group: 'Procurement' },
-  { id: 'resolution', label: 'Entity Resolution', group: 'Data operations' },
-  { id: 'materiality', label: 'Financial Materiality', group: 'Research' },
-  { id: 'companies', label: 'Company Intelligence', group: 'Research' },
-  { id: 'quality', label: 'Data Quality', group: 'Data operations' },
-];
-
-export default function App() {
-  const { segments } = useHashRoute();
-  const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<{ type: string; label: string; meta: string; href: string }[]>([]);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const page = segments[0] || 'overview';
-  const entityId = page === 'company' ? segments[1] : undefined;
-  const materialityEntityId = page === 'materiality' && segments[1] === 'company' ? segments[2] : undefined;
-  const tenderId = page === 'tender' ? segments[1] : undefined;
-
-  const knownPage =
-    NAV.some((n) => n.id === page) || page === 'company' || (page === 'tender' && tenderId !== undefined);
-
-  const runSearch = async (event: FormEvent) => {
-    event.preventDefault();
-    const query = search.trim();
-    if (!query) { setResults([]); setSearchOpen(false); return; }
-    setSearching(true); setSearchOpen(true);
-    try {
-      const [companies, evaluations, awards] = await Promise.all([
-        api.get<any>('companies', { q: query, page: 1, page_size: 5 }),
-        api.get<any>('financial-evaluation', { q: query, page: 1, page_size: 5 }),
-        api.get<any>('awards', { q: query, page: 1, page_size: 5 }),
-      ]);
-      const next = [
-        ...(companies.data || []).map((row: any) => ({ type: 'Company', label: str(row.canonical_name), meta: `${str(row.ticker_nse) || 'No NSE ticker'} · ${str(row.sector) || 'Sector unavailable'}`, href: `#!/company/${row.entity_id}` })),
-        ...(evaluations.data || []).map((row: any) => ({ type: 'Tender', label: str(row.title) || str(row.external_tender_id), meta: `${str(row.external_tender_id)} · ${str(row.buyer_org) || 'Organization unavailable'}`, href: `#!/tender/${encodeURIComponent(str(row.external_tender_id))}` })),
-        ...(awards.data || []).map((row: any) => ({ type: 'Award', label: str(row.awardee_name) || str(row.external_tender_id), meta: `${str(row.external_tender_id)} · ${str(row.buyer_org) || 'Organization unavailable'}`, href: `#!/tender/${encodeURIComponent(str(row.external_tender_id))}` })),
-      ].filter((row) => row.label).slice(0, 12);
-      setResults(next);
-    } catch {
-      setResults([]);
-    } finally { setSearching(false); }
-  };
-
-  useEffect(() => {
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) setSearchOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSearchOpen(false); };
-    document.addEventListener('mousedown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
-  }, []);
-
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">VY</div>
-          <div>
-            <div className="brand-name">VYUHA</div>
-            <div className="brand-sub">Procurement Intelligence</div>
-          </div>
-        </div>
-        <nav className="primary-nav" aria-label="Primary navigation">
-          {['Workspace', 'Procurement', 'Research', 'Data operations'].map((group) => <div className="nav-group" key={group}>
-            <div className="nav-group-label">{group}</div>
-            {NAV.filter((n) => n.group === group).map((n) => <a key={n.id} href={`#!/${n.id}`} className={page === n.id || (page === 'company' && n.id === 'companies') || (page === 'tender' && n.id === 'tender-detail') ? 'active' : ''}><span className="nav-marker" aria-hidden="true" />{n.label}</a>)}
-          </div>)}
-        </nav>
-        <div className="sidebar-foot">
-          <span className="status-dot" /> live research workspace
-          <br />
-          deterministic entity resolution
-        </div>
-      </aside>
-      <main className="content">
-        <div className="topbar"><div className="search-anchor" ref={searchRef}><form className="topbar-search" onSubmit={runSearch} role="search"><span aria-hidden="true">⌕</span><input aria-label="Search tenders, companies, and organizations" placeholder="Search tenders, companies, organizations…" value={search} onChange={(event) => { setSearch(event.target.value); if (event.target.value) setSearchOpen(true); }} onFocus={() => search && setSearchOpen(true)} /><button type="button" className="search-clear" aria-label="Close search" onClick={() => { setSearch(''); setResults([]); setSearchOpen(false); }}>×</button><kbd>⌘ K</kbd></form>{searchOpen && <div className="search-results">{searching ? <div className="search-empty">Searching Vyuha records…</div> : results.length ? results.map((result, index) => <a key={`${result.href}-${index}`} href={result.href} className="search-result" onClick={() => setSearchOpen(false)}><span className="search-result-type">{result.type}</span><span><b>{result.label}</b><small>{result.meta}</small></span></a>) : <div className="search-empty">No matching companies, tenders, or awards found.</div>}</div>}</div><div className="topbar-actions"><span className="date-control">Last 12 months⌄</span><span className="notification-dot" aria-label="Notifications" /></div></div>
-        {page === 'overview' && <Overview />}
-        {page === 'financial-evaluation' && <FinancialEvaluation />}
-        {page === 'awards' && <AwardedContracts />}
-        {page === 'award-intelligence' && <AwardIntelligence />}
-        {page === 'tender-detail' && <TenderDirectory />}
-        {page === 'resolution' && <EntityResolution />}
-        {page === 'materiality' && <Materiality detailId={materialityEntityId} />}
-        {page === 'companies' && <Companies />}
-        {page === 'company' && entityId !== undefined && <Companies detailId={entityId} />}
-        {page === 'tender' && tenderId !== undefined && <TenderDetail tenderId={tenderId} />}
-        {page === 'quality' && <DataQuality />}
-        {!knownPage && <div className="empty">Unknown page</div>}
-      </main>
-    </div>
-  );
-}
+type Route={page:string;id?:string};
+const getRoute=():Route=>{const raw=location.hash.replace(/^#!?\/?/,'')||'workspace';const p=raw.split('?')[0].split('/').filter(Boolean);return{page:p[0]||'workspace',id:p[1]}};
+const go=(p:string)=>{location.hash=`#!/${p}`};
+function Icon({name}:{name:string}){const d:Record<string,string>={search:'M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm5.5-1.5L21 22',network:'M5 5h.01M19 5h.01M12 19h.01M5 5l7 14 7-14M5 5h14',building:'M4 21V5l8-3 8 3v16M8 8h1m6 0h1M8 12h1m6 0h1M8 16h1m6 0h1',tender:'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',review:'M4 5h16v14H4zM8 9h8M8 13h5',arrow:'M5 12h14m-6-6 6 6-6 6',pulse:'M3 12h4l2-7 5 14 2-7h5'};return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d[name]||d.arrow}/></svg>}
+function Badge({children,tone='neutral'}:{children:React.ReactNode;tone?:string}){return <span className={`badge ${tone}`}>{children}</span>};
+function Fact({label,value,sub}:{label:string;value:React.ReactNode;sub?:string}){return <div className="fact"><span>{label}</span><strong>{value}</strong>{sub&&<small>{sub}</small>}</div>};
+function Shell({children}:{children:React.ReactNode}){const[r,setR]=useState(getRoute());const[q,setQ]=useState('');const[rs,setRs]=useState<any[]>([]);const[open,setOpen]=useState(false);useEffect(()=>{const f=()=>setR(getRoute());addEventListener('hashchange',f);return()=>removeEventListener('hashchange',f)},[]);useEffect(()=>{if(q.trim().length<2){setRs([]);return}const t=setTimeout(()=>api.get<any>('search',{q}).then(x=>setRs(x.data||[])).catch(()=>setRs([])),250);return()=>clearTimeout(t)},[q]);const choose=(x:any)=>{setQ('');setOpen(false);go(x.type==='company'?`company/${x.id}`:x.type==='tender'?`tender/${encodeURIComponent(x.id)}`:`bidder/${x.id}`)};const submit=(e:FormEvent)=>{e.preventDefault();if(rs[0])choose(rs[0])};return <div className="app-shell"><aside className="rail"><button className="wordmark" onClick={()=>go('workspace')}><span className="mark"><i/><i/><i/></span>TENDER<span>GRAPH</span></button><div className="rail-label">Investigate</div><nav><a className={r.page==='workspace'?'active':''} href="#!/workspace"><Icon name="search"/>Workspace</a><a href="#!/network"><Icon name="network"/>Network</a><a href="#!/company"><Icon name="building"/>Companies</a><a href="#!/tender"><Icon name="tender"/>Tenders</a><a className={r.page==='review'?'active':''} href="#!/review"><Icon name="review"/>Review</a></nav><div className="rail-bottom"><div className="live"><span/>PostgreSQL connected</div><small>HydraDB · bounded graph reads</small></div></aside><main className="main"><header className="topbar"><form className="global-search" onSubmit={submit}><Icon name="search"/><input value={q} onChange={e=>{setQ(e.target.value);setOpen(true)}} onFocus={()=>setOpen(true)} placeholder="Search companies, bidders, tenders, organizations" aria-label="Search records"/><kbd>⌘ K</kbd></form>{open&&q.length>1&&<div className="search-pop">{rs.length?rs.slice(0,8).map((x,i)=><button key={i} onClick={()=>choose(x)}><Badge tone={x.type}>{x.type}</Badge><span><strong>{str(x.label)||'Unnamed record'}</strong><small>{str(x.meta)||'Source record'}</small></span><Icon name="arrow"/></button>):<div className="search-none">No matching source records</div>}</div>}<div className="top-actions"><span className="env-dot"/>Development evidence environment</div></header><div className="content-wrap">{children}</div></main></div>}
+function Workspace(){const[k,setK]=useState<any>();useEffect(()=>{api.get<any>('overview/kpis').then(setK).catch(()=>{})},[]);return <><div className="hero"><div><div className="kicker">TENDERGRAPH / INVESTIGATION WORKSPACE</div><h1>Follow the evidence.</h1><p>Explore procurement relationships across bidders, tenders and corporate records. Every connection stays tied to its source, method and uncertainty.</p></div><div className="hero-note"><Icon name="pulse"/>Source facts are not conclusions.<br/>Candidate relationships require review.</div></div><div className="entry-grid"><Entry icon="search" title="Start with a record" text="Search a company, bidder, tender or government organization." onClick={()=>document.querySelector<HTMLInputElement>('.global-search')?.focus()} primary/><Entry icon="network" title="Trace a bidder network" text="Inspect repeat co-bidding through actual tender observations." onClick={()=>go('network')}/><Entry icon="review" title="Review relationships" text="Examine system candidates before any analyst assertion." onClick={()=>go('review')}/></div><div className="section-head"><div><div className="kicker">ORIENTATION</div><h2>Read the graph carefully</h2></div><span className="quiet">A bounded workspace for evidence-backed investigation</span></div><div className="principles"><Principle n="01" t="Observed" x="Participant records, tender facts and award evidence come directly from PostgreSQL source tables."/><Principle n="02" t="Derived" x="Co-bidding counts, overlap and paths are calculations over observed records—not legal identities."/><Principle n="03" t="Asserted" x="Corporate associations remain candidates until an analyst records an explicit decision and rationale."/></div><section className="availability"><div className="kicker">LIVE DATA SURFACE</div><h3>Available to investigate</h3><div className="availability-grid"><Fact label="Participant rows" value={k?.financial_evaluation?.records?fmtInt(k.financial_evaluation.records):'—'}/><Fact label="Award evidence" value={k?.awards?.award_records?fmtInt(k.awards.award_records):'—'}/><Fact label="Source tenders" value={k?.tender_lifecycle?.total_tenders?fmtInt(k.tender_lifecycle.total_tenders):'—'}/><Fact label="Identity caution" value="Required" sub="ambiguity is visible"/></div></section></>}
+function Entry({icon,title,text,onClick,primary=false}:{icon:string;title:string;text:string;onClick:()=>void;primary?:boolean}){return <button className={`entry-card ${primary?'primary':''}`} onClick={onClick}><span className="entry-icon"><Icon name={icon}/></span><span><b>{title}</b><small>{text}</small></span><Icon name="arrow"/></button>};function Principle({n,t,x}:{n:string;t:string;x:string}){return <div><em>{n}</em><b>{t}</b><p>{x}</p></div>}
+function Bidder({id}:{id?:string}){const[d,setD]=useState<any>();const[n,setN]=useState<any>();useEffect(()=>{if(id){api.get<any>(`bidders/${id}`,{limit:30}).then(x=>setD(x.data)).catch(()=>{});api.get<any>(`bidders/${id}/network`,{depth:2,limit:40}).then(x=>setN(x.data)).catch(()=>{})}},[id]);if(!id)return <Landing title="Procurement network" text="Select a bidder from search to inspect participation and co-bidding evidence."/>;if(!d)return <Loading/>;const p=d;return <><Crumb t="Network investigation"/><Heading kicker={`BIDDER RECORD / ${p.bid?.bid_gid}`} title={p.bid?.name||'Unnamed participant'} text={`Observed key ${p.bid?.observed_participant_key||'unavailable'}. This is a participant record, not a confirmed legal identity.`}/><div className="facts four"><Fact label="Distinct tenders" value={fmtInt(p.distinct_tenders)}/><Fact label="Organizations" value={fmtInt(p.distinct_organizations)}/><Fact label="Bid records" value={fmtInt(p.bid_records)}/><Fact label="Shared tenders" value={fmtInt(p.co_bid_tender_count)}/></div><div className="split"><section className="panel"><PanelTitle e="REPEAT CO-BIDDING" t="Frequent observed co-bidders" n="Shared tender counts, not collusion signals"/><div className="list">{(p.top_co_bidders||[]).map((x:any,i:number)=><div className="list-row" key={i}><span className="rank">0{i+1}</span><div><b>{x.example_name||x.observed_participant_key}</b><small>{x.observed_participant_key}</small></div><strong>{fmtInt(x.shared_tenders)} <small>shared</small></strong></div>)}{!p.top_co_bidders?.length&&<Empty t="No repeat co-bidding observations for this record."/>}</div></section><section className="panel"><PanelTitle e="PARTICIPATION HISTORY" t="Observed tender records" n="Most recent first"/><Table headers={['Tender','Organization','Observed','Rank']} rows={(p.participation_history||[]).map((x:any)=>[<a href={`#!/tender/${encodeURIComponent(x.external_tender)}`}>{x.external_tender}</a>,x.organization||'—',fmtDate(x.submitted_at),x.financial_rank||'—'])}/></section></div><section className="panel network-panel"><PanelTitle e="BOUNDED NETWORK / DEPTH 2" t="Observed bidder neighborhood" n="Go traversal over participant records; result capped at 40 nodes"/><div className="network-nodes">{(n?.nodes||[]).map((x:any)=><a key={x.bid_id} className={`network-node depth-${x.depth}`} href={`#!/bidder/${x.bid_id}`}><span>{x.depth===0?'ROOT':`HOP ${x.depth}`}</span><b>{x.name||'Unnamed participant'}</b><small>{x.observed_key||'key unavailable'}</small></a>)}{!n?.nodes?.length&&<Empty t="The bounded graph neighborhood is unavailable for this record."/>}</div></section></>}
+function Company({id}:{id?:string}){const[d,setD]=useState<any>();useEffect(()=>{if(id)api.get<any>(`companies/${id}/intelligence`,{limit:50}).then(x=>setD(x.data)).catch(()=>{})},[id]);if(!id)return <Landing title="Company intelligence" text="Select a CorporateEntity from search to inspect procurement exposure."/>;if(!d)return <Loading/>;const c=d.entity,e=d.procurement_exposure;return <><Crumb t="Company intelligence"/><Heading kicker={`CORPORATE ENTITY / ${c.entity_gid}`} title={c.canonical_name} text="Corporate records, procurement exposure and candidate vendor links in one evidence trail."/><div className="facts four"><Fact label="Contractor tenders" value={fmtInt(e.tender_count)} sub="on-record exposure"/><Fact label="Evidenced awards" value={fmtInt(e.evidenced_award_count)} sub="not recognized revenue"/><Fact label="Award exposure" value={e.total_award_value_inr_exact?`₹${e.total_award_value_inr_exact}`:'—'} sub="exact source values"/><Fact label="Market snapshot" value={d.latest_market?'Available':'Unavailable'}/></div><div className="split"><section className="panel"><PanelTitle e="IDENTITY REVIEW" t="Vendor associations" n="Candidate links never become automatic confirmations"/>{(d.link_candidates||[]).map((x:any,i:number)=><div className="candidate-row" key={i}><div><b>{x.business_name||'Unnamed vendor'}</b><small>{x.vendor_gid} · {x.gstin||'GSTIN unavailable'}</small></div><div className="candidate-methods">{(x.methods||[]).map((m:string)=><Badge key={m} tone={m.includes('AMBIGUOUS')?'warn':'candidate'}>{m}</Badge>)}</div></div>)}{!d.link_candidates?.length&&<Empty t="No candidate vendor associations were returned."/>}</section><section className="panel"><PanelTitle e="SOURCE LIMITATIONS" t="What this view cannot establish"/><ul className="caveats"><li>{e.interpretation}</li>{(d.data_limitations||[]).map((x:string)=><li key={x}>{x}</li>)}</ul></section></div><section className="panel"><PanelTitle e="PROCUREMENT EXPOSURE" t="Tender and award evidence" n="Contractor-on-record association is separate from winner evidence"/><Table headers={['Tender','Organization','Awardee record','Value','Association']} rows={(e.awards||[]).map((x:any)=>[<a href={`#!/tender/${encodeURIComponent(x.external_tender)}`}>{x.external_tender}</a>,x.organization||'—',x.awardee_name||'No awardee evidence',x.award_value_inr_exact?`₹${x.award_value_inr_exact}`:'—',<Badge tone="fact">{x.association}</Badge>])}/></section></>}
+function Tender({id}:{id?:string}){const[d,setD]=useState<any>();useEffect(()=>{if(id)api.get<any>(`tenders/${id}`).then(setD).catch(()=>{})},[id]);if(!id)return <Landing title="Tender intelligence" text="Open a tender from search or an evidence table."/>;if(!d)return <Loading/>;const t=d.tender;return <><Crumb t="Tender intelligence"/><Heading kicker={`TENDER / ${str(t?.external_tender_id||id)}`} title={t?.title||t?.external_tender_id||id} text={`${t?.organization||'Issuing organization unavailable'} · source tender record`}/><div className="facts four"><Fact label="Participants" value={fmtInt(d.participants?.length)}/><Fact label="Award record" value={d.award?'Available':'Unavailable'}/><Fact label="Tender value" value={t?.tender_value_raw||'—'}/><Fact label="Lifecycle" value={t?.lifecycle_stage||'—'}/></div><div className="split"><section className="panel"><PanelTitle e="PARTICIPANTS" t="Actual bid records" n="Participation is not a winner assertion"/><Table headers={['Participant','Rank','Bid value','Status']} rows={(d.participants||[]).map((x:any)=>[<><a href={`#!/bidder/${x.participant_id}`}>{x.participant_name||'Unnamed'}</a><small className="block-code">{x.participant_normalized||'observed key unavailable'}</small></>,x.financial_rank||'—',x.bid_value||'—',x.is_winner?<Badge tone="fact">winner flag</Badge>:'not classified'])}/></section><section className="panel"><PanelTitle e="AWARD EVIDENCE" t="Extracted outcome" n="Structural award evidence is separate from WON evidence"/>{d.award?<div className="award-box"><Fact label="Awardee" value={d.award.awardee_name||'—'}/><Fact label="Value" value={d.award.awarded_value||'—'}/><Fact label="Contract date" value={fmtDate(d.award.contract_date)}/><Fact label="Winning bid no." value={d.award.winning_bid_number||'—'}/></div>:<Empty t="No extracted award record is available."/>}</section></div></>}
+function Review(){const[items,setItems]=useState<any[]>([]);const[selected,setSelected]=useState<any>();const[msg,setMsg]=useState('');const load=()=>api.get<any>('review/candidates',{status:'PENDING',limit:50}).then(x=>setItems(x.data||[])).catch(()=>setItems([]));useEffect(()=>{load()},[]);const decide=async(status:string)=>{if(!selected)return;const rationale=prompt('Rationale required');if(!rationale)return;try{await api.post(`review/candidates/${selected.candidate_id}/decision`,{status,rationale,actor_id:'workspace-operator',actor_kind:'OPERATOR_SUPPLIED',expected_version:selected.current_version});setMsg('Decision recorded in PostgreSQL and queued as desired graph state.');setSelected(undefined);load()}catch(e:any){setMsg(e.message)}};return <><Heading kicker="ANALYST REVIEW / CANDIDATE QUEUE" title="Review the uncertain edges." text="System candidates are hypotheses. Confirming one records an analyst assertion; it does not rewrite the source record."/><>{msg&&<div className="notice">{msg}</div>}</><div className="review-layout"><section className="panel queue"><PanelTitle e="PENDING CANDIDATES" t={`${items.length} available`} n="Evidence-backed review queue"/>{items.map(x=><button className={`queue-row ${selected?.candidate_id===x.candidate_id?'selected':''}`} key={x.candidate_id} onClick={()=>setSelected(x)}><div><Badge tone="candidate">{x.relationship_type}</Badge><b>{x.source_gid} → {x.target_gid}</b><small>{x.generation_method} · version {x.current_version}</small></div><Icon name="arrow"/></button>)}{!items.length&&<Empty t="No pending candidates are available."/>}</section><section className="panel review-detail">{selected?<><PanelTitle e="CANDIDATE EVIDENCE" t={selected.relationship_type} n={selected.candidate_gid}/><div className="relationship"><code>{selected.source_gid}</code><span>→</span><code>{selected.target_gid}</code></div><Evidence label="Initial evidence" value={selected.initial_evidence}/><Evidence label="Latest observed evidence" value={selected.latest_evidence}/><div className="decision-actions"><button className="button solid" onClick={()=>decide('CONFIRMED')}>Confirm assertion</button><button className="button" onClick={()=>decide('NEEDS_REVIEW')}>Needs review</button><button className="button danger" onClick={()=>decide('REJECTED')}>Reject candidate</button></div><p className="microcopy">Every action requires a rationale and records an operator-supplied actor until authentication is available.</p></>:<Empty t="Select a candidate to inspect its evidence and history."/>}</section></div></>}
+function Empty({t}:{t:string}){return <div className="empty">{t}</div>};function Evidence({label,value}:{label:string;value:any}){return <div className="evidence-block"><label>{label}</label><pre>{JSON.stringify(value,null,2)}</pre></div>};function Table({headers,rows}:{headers:string[];rows:any[][]}){return <div className="table-scroll"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{row.map((x,j)=><td key={j}>{x}</td>)}</tr>)}</tbody></table></div>};function Heading({kicker,title,text}:{kicker:string;title:string;text:string}){return <div className="page-heading"><div><div className="kicker">{kicker}</div><h1>{title}</h1><p className="lede">{text}</p></div><Badge tone="fact">evidence-first</Badge></div>};function PanelTitle({e,t,n}:{e:string;t:string;n?:string}){return <div className="panel-title"><div><div className="kicker">{e}</div><h2>{t}</h2>{n&&<p>{n}</p>}</div></div>};function Crumb({t}:{t:string}){return <div className="crumb"><button onClick={()=>go('workspace')}>Workspace</button><span>/</span>{t}</div>};function Landing({title,text}:{title:string;text:string}){return <><div className="hero compact"><div><div className="kicker">INVESTIGATION ENTRY</div><h1>{title}</h1><p>{text}</p></div></div><div className="empty-large"><Icon name="search"/><b>Use the search field above to begin</b><span>Results preserve the distinction between companies, bidders and tender records.</span></div></>};function Loading(){return <div className="loading"><div/><div/><div/></div>}
+export default function App(){const[r,setR]=useState(getRoute());useEffect(()=>{const f=()=>setR(getRoute());addEventListener('hashchange',f);return()=>removeEventListener('hashchange',f)},[]);let p:React.ReactNode=r.page==='bidder'?<Bidder id={r.id}/>:r.page==='company'?<Company id={r.id}/>:r.page==='tender'?<Tender id={r.id}/>:r.page==='review'?<Review/>:r.page==='network'?<Landing title="Procurement network" text="Search for a bidder to inspect its observed tender history, repeat co-bidders and bounded network."/>:<Workspace/>;return <Shell>{p}</Shell>}
