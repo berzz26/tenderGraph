@@ -4,12 +4,14 @@ package intel
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"vyuha/api/internal/cfg"
 	"vyuha/api/internal/db"
 	"vyuha/api/internal/graph"
+	"vyuha/api/internal/projection"
 )
 
 func TestLiveInvestigationsAgainstPostgresAndHydraDB(t *testing.T) {
@@ -147,5 +149,75 @@ func TestLiveNativeHydraAlgorithms(t *testing.T) {
 	}
 	if len(res.Rows) == 0 {
 		t.Fatal("MSpaths returned no path for a known shared tender pair")
+	}
+}
+
+func TestLiveAnalystDecisionLifecycleUsesControlPlaneOnly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	config := cfg.Load()
+	if config.DatabaseURL == "" {
+		t.Fatal("DATABASE_URL is required")
+	}
+	pool, err := db.Connect(ctx, config.DatabaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	candidateGID := "TEST:CANDIDATE:PHASE7:" + time.Now().UTC().Format("20060102150405.000000000")
+	candidateID := projection.NumericID(candidateGID)
+	_, err = pool.Exec(ctx, `INSERT INTO tg_relationship_candidates
+ (candidate_id,candidate_gid,relationship_type,source_type,source_id,source_gid,target_type,target_id,target_gid,generation_method,initial_evidence,latest_evidence,generator_version)
+ VALUES ($1,$2,'VENDOR_CORPORATE_ENTITY','Vendor','test-vendor','VENDOR:cp:test-vendor','CorporateEntity','test-entity','ENTITY:v:test-entity','TEST_FIXTURE','[{"source_table":"test_fixture","source_pk":"1"}]','[{"source_table":"test_fixture","source_pk":"1"}]','test')`, candidateID, candidateGID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tg_graph_projection_outbox WHERE candidate_id=$1`, candidateID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tg_relationship_decision_history WHERE candidate_id=$1`, candidateID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tg_relationship_decisions WHERE candidate_id=$1`, candidateID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tg_relationship_candidates WHERE candidate_id=$1`, candidateID)
+	}()
+
+	store := ReviewStore{Pool: pool}
+	version0 := 0
+	first, err := store.Decide(ctx, DecisionInput{CandidateID: candidateID, Status: "CONFIRMED", Rationale: "test fixture only; not an analyst finding", EvidenceRefs: json.RawMessage(`[{"source_table":"test_fixture","source_pk":"1"}]`), ExpectedVersion: &version0, RequestID: "phase7-test-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.DecisionVersion != 1 || first.DesiredOperation != "UPSERT_CONFIRMED_RELATIONSHIP" {
+		t.Fatalf("first decision=%+v", first)
+	}
+	idempotent, err := store.Decide(ctx, DecisionInput{CandidateID: candidateID, Status: "CONFIRMED", Rationale: "retry", RequestID: "phase7-test-1"})
+	if err != nil || !idempotent.Idempotent {
+		t.Fatalf("idempotent retry=%+v err=%v", idempotent, err)
+	}
+
+	version1 := 1
+	if _, err := store.Decide(ctx, DecisionInput{CandidateID: candidateID, Status: "NEEDS_REVIEW", Rationale: "reopen for test", ExpectedVersion: &version1, RequestID: "phase7-test-2"}); err != nil {
+		t.Fatal(err)
+	}
+	version2 := 2
+	last, err := store.Decide(ctx, DecisionInput{CandidateID: candidateID, Status: "REJECTED", Rationale: "test fixture only; not an analyst finding", ExpectedVersion: &version2, RequestID: "phase7-test-3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last.DecisionVersion != 3 || last.DesiredOperation != "NO_CONFIRMED_RELATIONSHIP" {
+		t.Fatalf("last decision=%+v", last)
+	}
+	if _, err := store.Decide(ctx, DecisionInput{CandidateID: candidateID, Status: "CONFIRMED", Rationale: "stale version", ExpectedVersion: &version0, RequestID: "phase7-test-stale"}); err == nil {
+		t.Fatal("expected optimistic concurrency conflict")
+	}
+	history, err := store.History(ctx, candidateID)
+	if err != nil || len(history) != 3 {
+		t.Fatalf("history len=%d err=%v", len(history), err)
+	}
+	var projectionCount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM tg_graph_projection_outbox WHERE candidate_id=$1`, candidateID).Scan(&projectionCount); err != nil {
+		t.Fatal(err)
+	}
+	if projectionCount != 3 {
+		t.Fatalf("projection count=%d", projectionCount)
 	}
 }

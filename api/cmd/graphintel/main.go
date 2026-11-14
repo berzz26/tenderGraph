@@ -28,6 +28,15 @@ func main() {
 	by := fs.String("by", "participation", "ranking: participation|organizations|co-bidding")
 	from := fs.String("from", "", "inclusive RFC3339 observation time")
 	to := fs.String("to", "", "exclusive RFC3339 observation time")
+	relationshipType := fs.String("type", "", "review relationship type")
+	status := fs.String("status", "", "review status")
+	method := fs.String("method", "", "candidate generation method")
+	offset := fs.Int("offset", 0, "review queue offset")
+	reason := fs.String("reason", "", "analyst decision rationale")
+	analyst := fs.String("analyst", "", "analyst identifier, when available")
+	evidenceJSON := fs.String("evidence-json", "[]", "JSON evidence references")
+	expectedVersion := fs.Int("expected-version", -1, "expected candidate version for optimistic concurrency")
+	requestID := fs.String("request-id", "", "idempotency key for a decision request")
 	flagArgs, positional := splitArgs(os.Args[2:])
 	_ = fs.Parse(flagArgs)
 	args := positional
@@ -42,12 +51,20 @@ func main() {
 		log.Fatal(err)
 	}
 	defer pool.Close()
-	clients, err := graph.Open(graph.LoadGraphConfig())
-	if err != nil {
-		log.Fatal(err)
+	var clients *graph.Clients
+	if commandNeedsGraph(os.Args[1]) {
+		clients, err = graph.Open(graph.LoadGraphConfig())
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer clients.Close(context.Background())
 	}
-	defer clients.Close(context.Background())
-	svc := intel.Service{Pool: pool, Graph: clients.HTTP}
+	var graphClient *graph.HTTPClient
+	if clients != nil {
+		graphClient = clients.HTTP
+	}
+	svc := intel.Service{Pool: pool, Graph: graphClient}
+	review := intel.ReviewStore{Pool: pool}
 	window, err := parseWindow(*from, *to)
 	if err != nil {
 		log.Fatal(err)
@@ -99,6 +116,27 @@ func main() {
 	case "connections":
 		requireArgs(args, 1)
 		result, err = svc.NativeConnections(ctx, parseID(args[0]), *depth, *limit)
+	case "refresh-candidates":
+		result, err = review.RefreshCandidates(ctx)
+	case "review-queue":
+		queueStatus := *status
+		if queueStatus == "" {
+			queueStatus = "PENDING"
+		}
+		result, err = review.ListCandidates(ctx, intel.CandidateFilter{RelationshipType: *relationshipType, Status: queueStatus, Method: *method, Limit: *limit, Offset: *offset})
+	case "candidate":
+		requireArgs(args, 1)
+		result, err = review.GetCandidate(ctx, parseID(args[0]))
+	case "decision":
+		requireArgs(args, 1)
+		input := intel.DecisionInput{CandidateID: parseID(args[0]), Status: *status, Rationale: *reason, AnalystID: *analyst, EvidenceRefs: []byte(*evidenceJSON), RequestID: *requestID}
+		if *expectedVersion >= 0 {
+			input.ExpectedVersion = expectedVersion
+		}
+		result, err = review.Decide(ctx, input)
+	case "history":
+		requireArgs(args, 1)
+		result, err = review.History(ctx, parseID(args[0]))
 	default:
 		usage()
 		os.Exit(2)
@@ -123,7 +161,16 @@ func requireArgs(args []string, n int) {
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections [args] [--limit N] [--depth N] [--from RFC3339 --to RFC3339]")
+	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections|refresh-candidates|review-queue|candidate|decision|history [args]")
+}
+
+func commandNeedsGraph(command string) bool {
+	switch command {
+	case "co-bidders", "network", "degree", "paths", "connections":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseWindow(from, to string) (intel.TimeWindow, error) {
