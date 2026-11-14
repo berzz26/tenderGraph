@@ -247,6 +247,7 @@ func TestDecodeCellDirect(t *testing.T) {
 		{`{"type":"string","value":"x"}`, "x"},
 		{`{"type":"null"}`, nil},
 		{`{"type":"list","value":[{"type":"integer","value":1},{"type":"string","value":"s"}]}`, []any{int64(1), "s"}},
+		{`{"type":"path","value":{"nodes":[{"id":4611686018427387903}],"relationships":[]}}`, map[string]any{"nodes": []any{map[string]any{"id": int64(4611686018427387903)}}, "relationships": []any{}}},
 	}
 	for _, tc := range cases {
 		got, err := decodeCell([]byte(tc.in))

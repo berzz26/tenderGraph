@@ -91,6 +91,14 @@ func main() {
 	case "award":
 		requireArgs(args, 1)
 		result, err = svc.Award(ctx, parseID(args[0]))
+	case "degree":
+		result, err = svc.NativeDegree(ctx, *limit)
+	case "paths":
+		requireArgs(args, 2)
+		result, err = svc.NativeShortestPaths(ctx, parseID(args[0]), parseID(args[1]), *depth, *limit)
+	case "connections":
+		requireArgs(args, 1)
+		result, err = svc.NativeConnections(ctx, parseID(args[0]), *depth, *limit)
 	default:
 		usage()
 		os.Exit(2)
@@ -115,7 +123,7 @@ func requireArgs(args []string, n int) {
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award [args] [--limit N] [--from RFC3339 --to RFC3339]")
+	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections [args] [--limit N] [--depth N] [--from RFC3339 --to RFC3339]")
 }
 
 func parseWindow(from, to string) (intel.TimeWindow, error) {

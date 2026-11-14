@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -132,8 +133,70 @@ func decodeCell(b []byte) (any, error) {
 			out = append(out, v)
 		}
 		return out, nil
+	case "path":
+		// Native path procedures return a structured path envelope. Keep its
+		// node/relationship payload intact for bounded analytical responses;
+		// callers must not treat it as a writable graph object.
+		path, err := decodePathValue(env.Value)
+		if err != nil {
+			return nil, fmt.Errorf("decode path cell: %w", err)
+		}
+		return path, nil
 	default:
 		return nil, fmt.Errorf("decode cell: unknown type %q", env.Type)
+	}
+}
+
+// decodePathValue preserves HydraDB's large vertex and relationship IDs. A
+// generic interface{} JSON decode would turn those values into float64 and
+// lose precision above 2^53. Path property envelopes also carry explicit
+// Integer/Float/Bool/String keys, which are decoded to their scalar values.
+func decodePathValue(raw []byte) (any, error) {
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	return normalizePathJSON(value, ""), nil
+}
+
+func normalizePathJSON(value any, key string) any {
+	switch v := value.(type) {
+	case json.Number:
+		if key == "id" || key == "src" || key == "dst" || key == "Integer" {
+			if n, err := v.Int64(); err == nil {
+				return n
+			}
+		}
+		if f, err := v.Float64(); err == nil {
+			return f
+		}
+		return v.String()
+	case []any:
+		out := make([]any, len(v))
+		for i := range v {
+			out[i] = normalizePathJSON(v[i], "")
+		}
+		return out
+	case map[string]any:
+		// Typed property envelopes in native path responses are represented as
+		// {"Integer": 1}, {"String": "x"}, etc. Flatten them to the same
+		// scalar convention used by graph.Result for ordinary cells.
+		if len(v) == 1 {
+			for typeName, scalar := range v {
+				if typeName == "Integer" || typeName == "Float" || typeName == "Bool" || typeName == "String" {
+					return normalizePathJSON(scalar, typeName)
+				}
+			}
+		}
+		out := make(map[string]any, len(v))
+		for childKey, child := range v {
+			out[childKey] = normalizePathJSON(child, childKey)
+		}
+		return out
+	default:
+		return value
 	}
 }
 

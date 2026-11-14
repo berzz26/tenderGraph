@@ -7,10 +7,15 @@ implementation as documented by the maintainers ("Every behaviour below was veri
 against a running server" — USING-HYDRADB.md). No claim here rests on old Neo4j-fork
 material; HydraDB is an original Rust engine on SlateDB + S3-compatible object storage.
 
-**Environment status (verified on this machine):** HydraDB is **not installed** — no
-`cargo`/`rustc`, no `libcypher-parser`/`libgraphblas` system libraries, no prebuilt image,
-no running node. The smoke test (§7) is therefore NOT EXECUTED; the exact deployment recipe
-and the script to run it are documented in `docs/phase0/spike/`.
+**Environment status (updated 2026-11-14):** HydraDB build
+`0.1.0+916637477f3f` is running locally with query HTTP on `127.0.0.1:8443`,
+Bolt on `127.0.0.1:7687`, and admin endpoints on `127.0.0.1:19091`. Health and
+read-only query procedures were exercised against the populated TenderGraph
+graph. Mutation probes currently return HTTP 500 because the local storage
+backend reports `Operation put_opts with mode PutMode::Update not yet implemented
+by LocalFileSystem`; no Phase 6 mutation was attempted. The original deployment
+recipe remains below as reference, and the write smoke test is not rerun while
+the runtime is read-only.
 
 ## 1. What HydraDB is (verified)
 

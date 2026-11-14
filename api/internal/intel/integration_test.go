@@ -104,3 +104,48 @@ func TestLiveCorporateIntelligenceAgainstPostgres(t *testing.T) {
 		t.Fatalf("award report missing provenance: %+v", award)
 	}
 }
+
+func TestLiveNativeHydraAlgorithms(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	clients, err := graph.Open(graph.LoadGraphConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clients.Close(context.Background())
+	svc := Service{Graph: clients.HTTP}
+
+	degree, err := svc.NativeDegree(ctx, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(degree.Rows) == 0 || degree.Rows[0].BidGID == "" {
+		t.Fatalf("degree=%+v", degree)
+	}
+
+	paths, err := svc.NativeShortestPaths(ctx, 3223, 3222, 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths.Paths) == 0 || paths.SourceBidID != 3223 || paths.TargetBidID == nil || *paths.TargetBidID != 3222 {
+		t.Fatalf("paths=%+v", paths)
+	}
+
+	connections, err := svc.NativeConnections(ctx, 3223, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(connections.Paths) == 0 || connections.ResultLimit != 3 {
+		t.Fatalf("connections=%+v", connections)
+	}
+
+	// MSpaths uses indexed string selectors and is intentionally exercised
+	// directly here; its result rows are raw bounded path evidence.
+	res, err := clients.HTTP.DoQuery(ctx, `CALL algo.MSpaths({sourceLabel: 'Bid', sourceProperty: 'gid', sourceValues: ['BID:v:3223', 'BID:v:3222'], targetValues: ['BID:v:3223', 'BID:v:3222'], relTypes: ['CO_BID_IN'], relDirection: 'both', maxLen: 2, pathCount: 1, pairwise: false, resultLimit: 10}) YIELD path RETURN path`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) == 0 {
+		t.Fatal("MSpaths returned no path for a known shared tender pair")
+	}
+}
