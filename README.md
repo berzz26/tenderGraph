@@ -1,104 +1,205 @@
-# Vyuha — Financial Evaluation Entity Mapping & Intelligence Dashboard
+# TenderGraph
 
-Procurement intelligence that reconstructs the mapping between companies appearing
-in government financial evaluations / awarded-tender records and Vyuha's listed-company
-`entities` master — derived entirely from PostgreSQL, with the matching methodology
-fully exposed in the dashboard.
+TenderGraph is a PostgreSQL-to-HydraDB procurement intelligence projection.
+PostgreSQL remains the authoritative source; HydraDB stores a deterministic,
+rebuildable graph projection for procurement structure, provenance and bounded
+network queries.
 
-## Pipeline
+The repository contains:
 
-```
-Original name (tender_participants / tender_extracted_meta)
-        ↓ stored *_normalized values (validated to ~99.9% by shared SQL expression)
-        ↓ Entity resolution (deterministic, priority-ordered, no fuzzy matching)
-        ↓ Canonical listed company (entities)
-        ↓ NSE / BSE / ISIN
-        ↓ Financial data (entity_financials, latest_entity_financials)
-        ↓ Market capitalization (latest_entity_market_data)
-        ↓ Procurement intelligence (materiality, coverage, data quality)
-```
+- A Go 1.22 API in 'api/' using pgx/v5 and the standard HTTP library.
+- A React/Vite dashboard in 'frontend/' for the existing Vyuha views.
+- HydraDB integration in 'api/internal/graph/'.
+- Projection primitives in 'api/internal/projection/'.
+- The bounded synchronization engine in 'api/internal/ingest/'.
+- Operational CLIs in 'api/cmd/graphproject/' and 'api/cmd/graphsync/'.
 
-## Matching priority (never fuzzy)
+The dashboard is not required to run ingestion and is not rebuilt in the
+current ingestion phase.
 
-| Priority | Financial evaluation | Awards | Confidence |
-|---|---|---|---|
-| 1 | `participant_normalized` = `entities.normalized_name` | `awardee_normalized` = `entities.normalized_name` | highest |
-| 2 | = `entity_aliases.normalized_alias` | same | high |
-| 3 | = normalized(`canonical_name`) | normalized(`awardee_name`) = normalized(`canonical_name`) | high |
-| 4 | = normalized(`entity_gst.company_name`) | exact GSTIN: `contractor_v2.gst` = `entity_gst.gstin` | secondary |
-| 5 | unresolved | normalized name = `entity_gst.company_name` | secondary |
-| — | — | unresolved | |
+## Architecture
 
-* A record matching **more than one entity at the winning priority** is reported
-  `ambiguous` with every candidate visible — never silently resolved.
-* `entity_gst.company_name` matching is a secondary candidate that never overrides
-  a direct or alias match.
-* Award GST identity additionally uses the tender's `contractor_v2` assignment by
-  exact GSTIN equality; contractor names alone are never trusted as proof of the
-  listed parent.
-* The normalization expression (validated against production data:
-  5973/5973 entities, ≈99.8% of participants/awardees) lives in
-  `api/internal/sqlf/sqlf.go`. Stored normalized columns always take precedence.
+~~~text
+PostgreSQL source tables
+        |
+        | read-only, keyset-paginated scans
+        v
+TenderGraph projection primitives
+        |
+        | deterministic node/relationship MERGE batches
+        v
+HydraDB projection
+        |
+        +--> graph reads and reconciliation
 
-## Data facts discovered (used by the SQL)
+PostgreSQL tg_* control tables
+        ^
+        |
+watermarks, runs, batches and reconciliation records
+~~~
 
-* `tender_extracted_meta` is 1:1 with `tenders` (unique FK) — no join multiplication.
-* `aoc_date` is empty in production; `contract_date` is the award date and fiscal
-  year (April–March, `FY2027` etc).
-* `awarded_value` / `financial_bid_value` are varchar with Indian/western
-  comma grouping — parsed by stripping commas; 9 negative bid values parsed.
-* Money: procurement values are **rupees**; financials/market cap are **Rs crore** —
-  materiality ratios normalize before dividing, and stay NULL for missing/zero denominators.
-* Financial rank L1 buckets verified across variants (`L1`, `1`, `1ST`).
-* `contractor` (v1) is empty; `seller_details` has no GSTIN and is unused.
+The pipeline is sequential per HydraDB cell. It uses no Kafka, RabbitMQ, Redis,
+second graph database or separate vector database. PostgreSQL pgvector remains
+the semantic-similarity system.
 
-## Run
+“Full ingestion” means complete projection of the approved graph ontology and
+validated source mappings below, not a copy of every PostgreSQL table.
 
-```bash
-# 1. API (env via .env or environment)
+## Graph coverage
+
+The approved ingestion registry currently contains:
+
+| Dataset | Graph projection | Cursor |
+|---|---|---|
+| 'contractor_v2' | Vendor nodes | 'updated_at, id' |
+| 'entities' | CorporateEntity nodes | 'updated_at, id' |
+| 'entity_aliases' | Alias nodes and HAS_ALIAS edges | 'created_at, id' |
+| 'entity_gst' | GstRegistration nodes and HAS_GST_REGISTRATION edges | 'updated_at, id' |
+| 'tenders' | Tender, GovernmentOrganization, ISSUED_BY, CONTRACTOR_ON_RECORD | 'updated_at, id' |
+| 'tender_participants' | Bid, SUBMITTED_BID and CoBidObservation graph | 'updated_at, id' |
+| 'tender_extracted_meta' | Award, HAS_AWARD and evidence-backed WON edges | 'updated_at, id' |
+
+Important semantics:
+
+- 'CONTRACTOR_ON_RECORD' is not bid participation.
+- Actual participation comes from 'tender_participants'.
+- 'is_winner' alone never creates 'WON'.
+- Co-bidding is represented by per-tender 'CoBidObservation' nodes.
+- GSTIN and names create candidate evidence only; no identity is confirmed
+  automatically.
+- Every node and relationship retains source provenance.
+
+Excluded datasets include seller identity modeling, tender files/text,
+financial statements, market prices, BOQ intelligence and empty/schema-only
+tables. Their reasons are documented in the Phase 0 audit and Phase 3 report.
+
+Secrets are never committed or logged. The Phase 3 migration is additive and
+creates only 'tg_*' control-plane tables.
+
+## Synchronization CLI
+
+Run commands from 'api/'.
+
+Inspect the registry:
+
+~~~sh
+go run ./cmd/graphsync -op list
+~~~
+
+Preview a selected dataset without graph or control-plane writes:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -dataset contractor_v2 -dry-run
+~~~
+
+Run the complete initial projection in dependency order:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -batch-size 500 -verify
+~~~
+
+Run one dataset:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -dataset tenders -batch-size 500
+~~~
+
+Run incremental synchronization. Mutable datasets use a bounded one-hour
+lookback and a compound timestamp/primary-key cursor; replay is intentional and
+idempotent:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op incremental
+~~~
+
+Retry a failed dataset from its durable checkpoint:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op retry -dataset tender_participants
+~~~
+
+Inspect durable state:
+
+~~~sh
+go run ./cmd/graphsync -op status
+go run ./cmd/graphsync -op failed -dataset tender_participants
+~~~
+
+Reconcile without deleting anything:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op reconcile -dataset tender_participants -reconcile-mode detect
+~~~
+
+Repair is explicit. It replays the selected dataset; stale graph records are
+reported but are not automatically deleted:
+
+~~~sh
+HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op repair -dataset tender_participants
+~~~
+
+The Phase 2 vertical-slice tool remains available:
+
+~~~sh
+go run ./cmd/graphproject -tender-id 16234
+~~~
+
+## Existing dashboard
+
+Run the existing API:
+
+~~~sh
 cd api
-cp .env .env   # already contains DATABASE_URL / PORT
-go run .       # listens on PORT (default 8091)
+go run .
+~~~
 
-# 2. Dashboard
-cd ../frontend
+Run the frontend:
+
+~~~sh
+cd frontend
 npm install
-npm run dev    # http://localhost:5173 (proxies /api -> :8091)
+npm run dev
+~~~
 
-# production build (served by the API when ./dist exists next to its CWD)
-npm run build
-```
+The Vite development server proxies '/api' to port 8091. A production frontend
+build is served by the Go API when 'api/dist' exists.
 
-## API
+## Tests
 
-```
-GET /api/v1/overview/kpis
-GET /api/v1/financial-evaluation            ?page&page_size&sort&dir&q&mapping_status&method&winner&lifecycle&rank&entity_id
-GET /api/v1/financial-evaluation/summary
-GET /api/v1/financial-evaluation/leaderboard ?q&sort&dir
-GET /api/v1/awards                          ?page&page_size&sort&dir&q&mapping_status&method&fiscal_year&buyer_org&lifecycle&entity_id
-GET /api/v1/awards/summary
-GET /api/v1/awards/leaderboard              ?q&fiscal_year&sort&dir
-GET /api/v1/mappings/summary
-GET /api/v1/mappings/financial-evaluation   (= financial-evaluation list)
-GET /api/v1/mappings/awards                 (= awards list)
-GET /api/v1/mappings/unresolved             ?dataset=fe|awards|all
-GET /api/v1/mappings/ambiguous              ?dataset=fe|awards|all
-GET /api/v1/companies
-GET /api/v1/companies/{entityId}
-GET /api/v1/tenders/{tenderId}              (tender + meta + contractor + mapping outcome, participants, files, BOQ)
-GET /api/v1/materiality                     ?q&has_financials&sort&dir
-GET /api/v1/data-quality
-```
+Unit/build checks:
 
-All filtering, sorting, pagination and aggregation happen server-side; every user
-input reaches PostgreSQL only through parameter placeholders.
+~~~sh
+cd api
+go test ./...
+go vet ./...
+~~~
 
-## Headline results (current dataset)
+Live integration checks require the development HydraDB token and PostgreSQL
+connection:
 
-* Financial evaluation: 13,815 records / 2,844 tenders / 6,084 unique names
-  → 89 mapped (63 entities, 2,019 cr bid value), 1 ambiguous, 13,725 unresolved.
-* Awards: 18,222 records
-  → 391 mapped-listed (177 entities; ≈ Rs 95,967 cr of awarded value), 7 ambiguous.
-* Mapping methods: direct 72 + GST-name 17 (feval); direct 298 + alias 4 +
-  GST-contractor 34 + GST-name 61 (awards).
+~~~sh
+cd api
+set -a
+. .env
+set +a
+export HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token
+go test -tags integration ./...
+~~~
+
+Graph integration tests use bounded disposable probe records where cleanup is
+appropriate; ingestion recovery tests use approved projection records and do
+not delete the graph projection. No integration test modifies PostgreSQL
+source tables.
+
+## Documentation
+
+- Phase 0 audit and ontology: 'docs/phase0/'
+- HydraDB application integration: 'docs/phase1/PHASE_1B_REPORT.md'
+- Projection foundation: 'docs/phase2/PHASE_2_REPORT.md'
+- Full ingestion and synchronization: 'docs/phase3/PHASE_3_REPORT.md'
+- Control-plane migration: 'api/migrations/002_tendergraph_sync.sql'
+
+The HydraDB compatibility documents distinguish verified runtime behavior from
+documentation-only or still-unverified assumptions. In particular, the
+verified replay form is batch relationship 'MERGE' with a deterministic
+relationship id; relationship 'CREATE' is not used for replay-safe writes.

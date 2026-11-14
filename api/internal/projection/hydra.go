@@ -14,7 +14,8 @@ import (
 // client. It intentionally uses separate node and edge requests because
 // HydraDB has auto-commit writes and no multi-statement transactions.
 type HydraWriter struct {
-	Client *graph.HTTPClient
+	Client    *graph.HTTPClient
+	BatchSize int
 }
 
 // WriteReport records the requests made by a projection write.
@@ -23,6 +24,114 @@ type WriteReport struct {
 	EdgeRequests int
 	Nodes        int
 	Edges        int
+}
+
+// EdgeVerification is an endpoint-level verification result. HydraDB's
+// verified runtime does not expose relationship variables in RETURN, so the
+// result intentionally identifies edges by type and endpoint pair. The
+// relationship id is still used for writes and replay, but cannot be read
+// back from this runtime.
+type EdgeVerification struct {
+	Expected   int
+	Actual     int
+	Missing    int
+	Duplicate  int
+	Unexpected int
+}
+
+// VerifyNodes checks an expected node inventory in bounded id batches. It does
+// not scan an entire label, which is important for HydraDB runtimes where a
+// label-wide ordered scan can exceed the HTTP query budget.
+func (w HydraWriter) VerifyNodes(ctx context.Context, label string, expected map[int64]string) (missing, invalid int, err error) {
+	if w.Client == nil {
+		return 0, 0, fmt.Errorf("hydra writer: nil client")
+	}
+	if err := validateIdentifier(label); err != nil {
+		return 0, 0, err
+	}
+	ids := make([]int64, 0, len(expected))
+	for id := range expected {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	const readChunk = 500
+	for start := 0; start < len(ids); start += readChunk {
+		end := start + readChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		params := map[string]any{}
+		predicates := make([]string, 0, end-start)
+		found := map[int64]bool{}
+		for i, id := range ids[start:end] {
+			key := fmt.Sprintf("id%d", i)
+			predicates = append(predicates, "n.id = $"+key)
+			params[key] = id
+		}
+		q := "MATCH (n:" + label + ") WHERE " + strings.Join(predicates, " OR ") + " RETURN n.id AS id, n.gid AS gid, n.src_table AS src_table, n.src_pk AS src_pk"
+		res, queryErr := w.Client.DoQuery(ctx, q, params)
+		if queryErr != nil {
+			return missing, invalid, fmt.Errorf("verify %s node batch: %w", label, queryErr)
+		}
+		for i := range res.Rows {
+			id, idErr := res.Int64(i, 0)
+			gid, gidErr := res.String(i, 1)
+			_, tableErr := res.String(i, 2)
+			_, pkErr := res.String(i, 3)
+			if idErr != nil || gidErr != nil || tableErr != nil || pkErr != nil || gid == "" || expected[id] != gid {
+				invalid++
+				continue
+			}
+			found[id] = true
+		}
+		missing += (end - start) - len(found)
+	}
+	return missing, invalid, nil
+}
+
+// InventoryEdges walks one typed relationship inventory using HydraDB's
+// consuming HTTP cursor. The callback receives endpoint identities only;
+// relationship properties cannot be returned by the verified runtime because
+// relationship variables are not supported in RETURN.
+func (w HydraWriter) InventoryEdges(ctx context.Context, fromLabel, typ, toLabel string, visit func(int64, int64) error) (int, error) {
+	if w.Client == nil {
+		return 0, fmt.Errorf("hydra writer: nil client")
+	}
+	for _, value := range []string{fromLabel, typ, toLabel} {
+		if err := validateIdentifier(value); err != nil {
+			return 0, err
+		}
+	}
+	q := "MATCH (a:" + fromLabel + ")-[:" + typ + "]->(b:" + toLabel + ") RETURN a.id AS src, b.id AS dst ORDER BY a.id, b.id"
+	res, err := w.Client.DoQuery(ctx, q, nil)
+	if err != nil {
+		return 0, fmt.Errorf("inventory %s edges: %w", typ, err)
+	}
+	count := 0
+	for {
+		for i := range res.Rows {
+			src, err := res.Int64(i, 0)
+			if err != nil {
+				return count, err
+			}
+			dst, err := res.Int64(i, 1)
+			if err != nil {
+				return count, err
+			}
+			if err := visit(src, dst); err != nil {
+				return count, err
+			}
+			count++
+		}
+		if res.NextCursor == nil || res.QueryID == "" {
+			break
+		}
+		res, err = w.Client.QueryPage(ctx, q, nil, res.QueryID, *res.NextCursor)
+		if err != nil {
+			return count, fmt.Errorf("inventory %s edges page: %w", typ, err)
+		}
+	}
+	return count, nil
 }
 
 // CheckCollisions reads only the gid property at each outgoing id. A missing
@@ -36,21 +145,55 @@ func (w HydraWriter) CheckCollisions(ctx context.Context, nodes []Node) error {
 	if err := ValidateNoCollisions(nil, nodes); err != nil {
 		return err
 	}
+	const readChunk = 500
 	for _, n := range nodes {
-		if prior, ok := seen[n.ID]; ok && prior == n.GID {
+		if prior, ok := seen[n.ID]; ok {
+			if prior != n.GID {
+				return &CollisionError{ID: n.ID, ExistingGID: prior, IncomingGID: n.GID}
+			}
 			continue
 		}
 		seen[n.ID] = n.GID
-		res, err := w.Client.DoQuery(ctx, "MATCH (n {id: $id}) RETURN n.gid AS gid", map[string]any{"id": n.ID})
+	}
+	unique := make([]Node, 0, len(seen))
+	added := make(map[int64]bool, len(seen))
+	for _, n := range nodes {
+		if !added[n.ID] {
+			added[n.ID] = true
+			unique = append(unique, n)
+		}
+	}
+	for start := 0; start < len(unique); start += readChunk {
+		end := start + readChunk
+		if end > len(unique) {
+			end = len(unique)
+		}
+		params := map[string]any{}
+		predicates := make([]string, 0, end-start)
+		expected := map[int64]string{}
+		for i, n := range unique[start:end] {
+			key := fmt.Sprintf("id%d", i)
+			predicates = append(predicates, "n.id = $"+key)
+			params[key] = n.ID
+			expected[n.ID] = n.GID
+		}
+		q := "MATCH (n) WHERE " + strings.Join(predicates, " OR ") + " RETURN n.id AS id, n.gid AS gid"
+		res, err := w.Client.DoQuery(ctx, q, params)
 		if err != nil {
-			return fmt.Errorf("check collision for %s: %w", n.GID, err)
+			return fmt.Errorf("check collision batch: %w", err)
 		}
-		if res.Count() == 0 {
-			continue
-		}
-		old, err := res.String(0, 0)
-		if err != nil || old != n.GID {
-			return &CollisionError{ID: n.ID, ExistingGID: old, IncomingGID: n.GID}
+		for i := range res.Rows {
+			id, err := res.Int64(i, 0)
+			if err != nil {
+				return fmt.Errorf("check collision id: %w", err)
+			}
+			old, err := res.String(i, 1)
+			if err != nil {
+				return fmt.Errorf("check collision gid: %w", err)
+			}
+			if old != expected[id] {
+				return &CollisionError{ID: id, ExistingGID: old, IncomingGID: expected[id]}
+			}
 		}
 	}
 	return nil
@@ -90,46 +233,62 @@ func (w HydraWriter) Write(ctx context.Context, batch Batch) (WriteReport, error
 	if w.Client == nil {
 		return report, fmt.Errorf("hydra writer: nil client")
 	}
+	limit := w.BatchSize
+	if limit <= 0 || limit > 1000 {
+		limit = 500
+	}
 	if err := w.CheckCollisions(ctx, batch.Nodes); err != nil {
 		return report, err
 	}
 
 	for _, group := range groupNodes(batch.Nodes) {
-		rows := make([]map[string]any, 0, len(group.nodes))
-		for _, n := range group.nodes {
-			row := cloneMap(n.Props)
-			row["id"] = n.ID
-			rows = append(rows, row)
+		for start := 0; start < len(group.nodes); start += limit {
+			end := start + limit
+			if end > len(group.nodes) {
+				end = len(group.nodes)
+			}
+			rows := make([]map[string]any, 0, end-start)
+			for _, n := range group.nodes[start:end] {
+				row := cloneMap(n.Props)
+				row["id"] = n.ID
+				rows = append(rows, row)
+			}
+			q, err := nodeBatchQuery(group.label, group.keys)
+			if err != nil {
+				return report, err
+			}
+			if _, err := w.Client.DoQuery(ctx, q, map[string]any{"rows": rows}); err != nil {
+				return report, fmt.Errorf("write %s nodes: %w", group.label, err)
+			}
+			report.NodeRequests++
+			report.Nodes += len(rows)
 		}
-		q, err := nodeBatchQuery(group.label, group.keys)
-		if err != nil {
-			return report, err
-		}
-		if _, err := w.Client.DoQuery(ctx, q, map[string]any{"rows": rows}); err != nil {
-			return report, fmt.Errorf("write %s nodes: %w", group.label, err)
-		}
-		report.NodeRequests++
-		report.Nodes += len(rows)
 	}
 
 	for _, group := range groupEdges(batch.Edges) {
-		rows := make([]map[string]any, 0, len(group.edges))
-		for _, e := range group.edges {
-			row := cloneMap(e.Props)
-			row["src"] = e.FromID
-			row["dst"] = e.ToID
-			row["rid"] = e.RID
-			rows = append(rows, row)
+		for start := 0; start < len(group.edges); start += limit {
+			end := start + limit
+			if end > len(group.edges) {
+				end = len(group.edges)
+			}
+			rows := make([]map[string]any, 0, end-start)
+			for _, e := range group.edges[start:end] {
+				row := cloneMap(e.Props)
+				row["src"] = e.FromID
+				row["dst"] = e.ToID
+				row["rid"] = e.RID
+				rows = append(rows, row)
+			}
+			q, err := edgeBatchQuery(group)
+			if err != nil {
+				return report, err
+			}
+			if _, err := w.Client.DoQuery(ctx, q, map[string]any{"rows": rows}); err != nil {
+				return report, fmt.Errorf("write %s edges: %w", group.typ, err)
+			}
+			report.EdgeRequests++
+			report.Edges += len(rows)
 		}
-		q, err := edgeBatchQuery(group)
-		if err != nil {
-			return report, err
-		}
-		if _, err := w.Client.DoQuery(ctx, q, map[string]any{"rows": rows}); err != nil {
-			return report, fmt.Errorf("write %s edges: %w", group.typ, err)
-		}
-		report.EdgeRequests++
-		report.Edges += len(rows)
 	}
 	return report, nil
 }
@@ -164,6 +323,156 @@ func (w HydraWriter) DeleteAndVerify(ctx context.Context, nodes []Node) error {
 	}
 	return nil
 }
+
+// VerifyBatch checks every written node and relationship in bounded read
+// queries. HydraDB's dialect does not support IN, so ids are expressed as
+// parameterized OR predicates, never interpolated.
+func (w HydraWriter) VerifyBatch(ctx context.Context, batch Batch) error {
+	if w.Client == nil {
+		return fmt.Errorf("hydra writer: nil client")
+	}
+	const readChunk = 100
+	for _, group := range groupNodes(batch.Nodes) {
+		for start := 0; start < len(group.nodes); start += readChunk {
+			end := start + readChunk
+			if end > len(group.nodes) {
+				end = len(group.nodes)
+			}
+			params := map[string]any{}
+			predicates := make([]string, 0, end-start)
+			expected := map[int64]string{}
+			for i, n := range group.nodes[start:end] {
+				key := fmt.Sprintf("id%d", i)
+				predicates = append(predicates, "n.id = $"+key)
+				params[key] = n.ID
+				expected[n.ID] = n.GID
+			}
+			q := "MATCH (n:" + group.label + ") WHERE " + strings.Join(predicates, " OR ") + " RETURN n.id AS id, n.gid AS gid"
+			res, err := w.Client.DoQuery(ctx, q, params)
+			if err != nil {
+				return fmt.Errorf("verify %s nodes: %w", group.label, err)
+			}
+			if res.Count() != len(expected) {
+				return fmt.Errorf("verify %s nodes: got %d rows want %d", group.label, res.Count(), len(expected))
+			}
+			for i := range res.Rows {
+				id, err := res.Int64(i, 0)
+				if err != nil {
+					return err
+				}
+				gid, err := res.String(i, 1)
+				if err != nil {
+					return err
+				}
+				if expected[id] != gid {
+					return fmt.Errorf("verify node id %d gid %q want %q", id, gid, expected[id])
+				}
+				delete(expected, id)
+			}
+			if len(expected) != 0 {
+				return fmt.Errorf("verify %s nodes missing %d ids", group.label, len(expected))
+			}
+		}
+	}
+	for _, group := range groupEdges(batch.Edges) {
+		check, err := w.VerifyEdges(ctx, group.edges)
+		if err != nil {
+			return err
+		}
+		if check.Missing != 0 || check.Duplicate != 0 || check.Unexpected != 0 {
+			return fmt.Errorf("verify %s edges: expected=%d actual=%d missing=%d duplicate=%d unexpected=%d", group.typ, check.Expected, check.Actual, check.Missing, check.Duplicate, check.Unexpected)
+		}
+	}
+	return nil
+}
+
+// VerifyEdges performs bounded endpoint/type inventory checks for a set of
+// expected relationships. It is also used by reconciliation to distinguish
+// missing relationships from duplicate logical endpoint relationships.
+func (w HydraWriter) VerifyEdges(ctx context.Context, edges []Edge) (EdgeVerification, error) {
+	if w.Client == nil {
+		return EdgeVerification{}, fmt.Errorf("hydra writer: nil client")
+	}
+	const readChunk = 500
+	var total EdgeVerification
+	for _, group := range groupEdges(edges) {
+		sourcePairs := map[int64]map[string]bool{}
+		for _, edge := range group.edges {
+			if sourcePairs[edge.FromID] == nil {
+				sourcePairs[edge.FromID] = map[string]bool{}
+			}
+			sourcePairs[edge.FromID][edgeKey(edge)] = true
+		}
+		sources := make([]int64, 0, len(sourcePairs))
+		for source := range sourcePairs {
+			sources = append(sources, source)
+		}
+		sort.Slice(sources, func(i, j int) bool { return sources[i] < sources[j] })
+		for start := 0; start < len(sources); start += readChunk {
+			end := start + readChunk
+			if end > len(sources) {
+				end = len(sources)
+			}
+			params := map[string]any{}
+			predicates := make([]string, 0, end-start)
+			expected := map[string]bool{}
+			for i, source := range sources[start:end] {
+				key := fmt.Sprintf("a%d", i)
+				predicates = append(predicates, "a.id = $"+key)
+				params[key] = source
+				for pair := range sourcePairs[source] {
+					expected[pair] = true
+				}
+			}
+			q := "MATCH (a:" + group.fromLabel + ")-[:" + group.typ + "]->(b:" + group.toLabel + ") WHERE " + strings.Join(predicates, " OR ") + " RETURN a.id AS src, b.id AS dst"
+			res, err := w.Client.DoQuery(ctx, q, params)
+			if err != nil {
+				return total, fmt.Errorf("verify %s edges: %w", group.typ, err)
+			}
+			expectedCount := len(expected)
+			actual := 0
+			unexpected := 0
+			for {
+				actual += res.Count()
+				for i := range res.Rows {
+					src, err := res.Int64(i, 0)
+					if err != nil {
+						return total, err
+					}
+					dst, err := res.Int64(i, 1)
+					if err != nil {
+						return total, err
+					}
+					key := fmt.Sprintf("%d:%d", src, dst)
+					if !expected[key] {
+						unexpected++
+					} else {
+						delete(expected, key)
+					}
+				}
+				if res.NextCursor == nil || res.QueryID == "" {
+					break
+				}
+				res, err = w.Client.QueryPage(ctx, q, params, res.QueryID, *res.NextCursor)
+				if err != nil {
+					return total, fmt.Errorf("verify %s edges page: %w", group.typ, err)
+				}
+			}
+			missing := len(expected)
+			total.Expected += expectedCount
+			total.Actual += actual
+			total.Missing += missing
+			total.Unexpected += unexpected
+			found := expectedCount - missing
+			if actual > found {
+				total.Duplicate += actual - found
+			}
+		}
+	}
+	return total, nil
+}
+
+func edgeKey(e Edge) string { return fmt.Sprintf("%d:%d", e.FromID, e.ToID) }
 
 type nodeGroup struct {
 	label string

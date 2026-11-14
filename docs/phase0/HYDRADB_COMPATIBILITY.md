@@ -38,7 +38,7 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Node `MERGE` (bare) | Rejected (edge pattern required) | same | Node upsert via `UNWIND $rows MERGE (n {id: row.id}) SET n:Label, n.prop=...` |
 | Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids; **documented id type is non-negative integers** (cypher-compat §Values); string ids are not documented | USING-HYDRADB §Identity and idempotency; cypher-compat §Values | Vertex id = versioned 63-bit hash of the complete `gid` string (numeric); `gid` kept as a string property (GRAPH_ONTOLOGY §3) |
 | Relationship `MERGE` by `id` property | Documented only in batch form; **Phase 2 live probe verified replay uniqueness across separate requests** for `UNWIND … MATCH … MERGE (a)-[r:T {id: row.rid}]->(b)`; no general relationship constraint is assumed | Phase 2 integration probe against build `0.1.0+916637477f3f`; cypher-compat §Batches | Use deterministic relationship ids with batch MERGE; observation nodes remain required for multi-observation facts |
-| Relationship `CREATE` / `MERGE` | Yes; `MERGE` edge is idempotent; plain `CREATE` duplicates edges | USING-HYDRADB idempotency table (3×MERGE→1 edge; 3×CREATE→3 edges) | Use `MERGE` or batched `UNWIND … CREATE` everywhere |
+| Relationship `CREATE` / `MERGE` | Batch `MERGE` by deterministic relationship `id` replayed safely across separate requests; plain `CREATE` duplicates relationships across requests | Phase 2/3 live probe against the verified development build | Use deterministic batch `MERGE`; do not use `CREATE` for replayable ingestion |
 | `SET` / `REMOVE` | Yes, after a `MATCH`; `id` immutable; labels settable | cypher-compat §SET | Patch provenance/timestamp properties |
 | `DELETE` / `DETACH DELETE` | Yes, after `MATCH` | cypher-compat | Identity rejections, test isolation |
 | `OPTIONAL MATCH` | Yes for reads; rejected in mutations | cypher-compat §Quick reference | Left-outer semantics for missing financials |
@@ -53,7 +53,7 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Undirected patterns, `[:A\|B]`, `(a)-->(b)` | Rejected (one type, one direction) | USING-HYDRADB §dialect table | Query service enumerates directions client-side |
 | `MATCH` needs anchor | Yes — id, label, or property predicate required | USING-HYDRADB §dialect | Ontology mandates labels on every node |
 | Label-anchored counts | Yes — but only if **every source node carries the label** | USING-HYDRADB verified caveat | Ingestion writes labels in the same batch |
-| `UNWIND` batch writes | Yes, parameter-driven list of maps; **cap 1024 items**; edge batch `UNWIND … CREATE` is idempotent on (src,dst,type); node batch is `UNWIND … MERGE (n {id}) SET n:Label, props` | cypher-compat §Batches; USING-HYDRADB §Batch writes | **Primary ingestion path** (chunk 1000). Note: the `(src,dst,type)` dedupe collapses multi-edges — co-bid evidence is node-based (`CoBidObservation`), not `Bid→Bid` edges |
+| `UNWIND` batch writes | Yes, parameter-driven list of maps; **cap 1024 items**; a single request may deduplicate plain edge `CREATE` on (src,dst,type), but replay across requests is not safe; node batch is `UNWIND … MERGE (n {id}) SET n:Label, props` | cypher-compat §Batches; Phase 2/3 live probe | **Primary ingestion path** (chunk 1000). Relationship `MERGE` with deterministic `id` is used for replay; co-bid evidence remains node-based (`CoBidObservation`) |
 | `UNWIND` inline lists / batch reads | Parameter only; batched read has fixed 2-column projection | same | Bulk loader design |
 | Transactions | **None** — auto-commit only; `BEGIN/COMMIT/ROLLBACK` rejected | architecture §Client Boundary; USING-HYDRADB §Transactions | Write idempotency via MERGE semantics + PK-watermarked re-runs |
 | Query parameters | Scalars everywhere; lists only as UNWIND input | cypher-compat §Values | Projection batches pass row maps |
@@ -96,22 +96,15 @@ SET n:Vendor, n.gid = row.gid, n.name = row.name, n.gstin = row.gstin, n.updated
 ```cypher
 UNWIND $rows AS row
   MATCH (t:Tender {id: row.t}), (v:Vendor {id: row.v})
-  CREATE (v)-[:CONTRACTOR_ON_RECORD {src_table: 'tenders', src_pk: row.pk}]->(t)
-```
-or, where per-source-row relationship identity is required and MERGE-by-`id` on
-relationships is being used (documented batch form; **uniqueness semantics under-specified —
-confirm in the smoke test before relying on it**):
-```cypher
-UNWIND $rows AS row
-  MATCH (t:Tender {id: row.t}), (v:Vendor {id: row.v})
   MERGE (v)-[r:CONTRACTOR_ON_RECORD {id: row.rid}]->(t)
   SET r.src_pk = row.pk
 ```
 - Edge batch creates endpoint records if absent (**unlabelled** — run the node batch first).
 - Ordering rule: labels/properties batch → edge batch (avoids unlabelled windows).
-- Plain batch `CREATE` duplicates nothing only because the batch dedupes on
-  `(src,dst,type)`; that same dedupe collapses legitimate multi-edges — which is why
-  multi-observation facts (co-bids) are `CoBidObservation` **nodes** (3.3), not edges.
+- Plain batch `CREATE` may deduplicate within one request, but separate requests
+  can create duplicates. Replayable ingestion therefore uses relationship
+  `MERGE` with a deterministic `id`; multi-observation facts remain
+  `CoBidObservation` **nodes** (3.3), not direct bid-to-bid edges.
 
 ### 3.3 Bounded multi-hop MATCH (co-bid network via observation nodes)
 ```cypher
@@ -190,9 +183,9 @@ UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
 
 ## 4. Application-level functionality we must implement (not native)
 
-1. **Relationship identity / idempotency**: only `(src,dst,type)` batch dedupe is documented;
-   relationship `MERGE`-by-`id` is documented only in batch form and its uniqueness semantics
-   are **under-specified**. Idempotency is our responsibility: deterministic row-keyed edges,
+1. **Relationship identity / idempotency**: relationship `MERGE`-by-`id` is
+   verified across separate requests in the target development build, but no
+   database-wide relationship constraint is assumed. Idempotency is still our responsibility: deterministic row-keyed edges,
    `CoBidObservation` nodes for multi-observation facts, replay-safe batches — not assumed
    from HydraDB constraints (none are documented).
 2. **Uniqueness beyond `id`** (e.g., one CONFIRMED identity per vendor): enforce in the
@@ -228,8 +221,8 @@ observation-node requirement for legitimate repeated facts.
 |---|---|
 | **String vertex ids** (`MERGE (n {id: <string>)`) | **NOT INVESTIGATED in engine** — docs state node ids are non-negative integers; string id behavior (accept/reject/coerce) must be probed in the smoke test before any reliance. TenderGraph does not use string ids. |
 | `GRAPH_CYPHER_ENGINE=datafusion` variant | Needs investigation before relying on it; documented as rejecting `DETACH DELETE` and some multi-row mutations. We plan to stay on the default `legacy` engine. |
-| `MERGE` edge with extra pattern properties under UNWIND | Documented as rejected for the vertex-upsert shape; edge-MERGE shape shown above is the documented form — verify in smoke test. |
-| Relationship `MERGE`-by-`id` uniqueness on replay | Under-specified in docs; smoke test must prove replay produces exactly one edge per relationship id (spike/hydradb_smoke.md step R). |
+| `MERGE` edge with extra pattern properties under UNWIND | Edge-MERGE with `{id: row.rid}` and a separate `SET` is verified in the Phase 2/3 live projection. |
+| Relationship `MERGE`-by-`id` uniqueness on replay | Verified across separate requests in the Phase 2/3 live projection for the target build; not promoted to a general database constraint. |
 | Bookmark / `strong` consistency behavior | Documented; **runtime-unverified** — smoke test steps B (bookmark round trip) gate any read-your-writes reliance. |
 | Delete behavior (`DETACH DELETE` visibility to subsequent reads) | Documented as supported; runtime-unverified — gates the source-deletion handling decision (ARCHITECTURE §2.6). |
 | Exact behavior of `algo.MSpaths` default `pairwise` | Default unspecified per docs; smoke test to confirm, code sets it explicitly. |

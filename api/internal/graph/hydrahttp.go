@@ -87,7 +87,7 @@ type rawResponse struct {
 // ctx controls cancellation/deadline; it is honored on top of the client
 // timeout (whichever fires first).
 func (c *HTTPClient) DoQuery(ctx context.Context, query string, params map[string]any) (*Result, error) {
-	return c.doQuery(ctx, queryRequest{CellID: c.cellID, Query: query, Parameters: params})
+	return c.doQuery(ctx, queryRequest{CellID: c.cellID, Query: query, Parameters: params, PageSize: 4096})
 }
 
 // QueryPage fetches the next page of a previous read. Verified continuation
@@ -100,6 +100,7 @@ func (c *HTTPClient) QueryPage(ctx context.Context, query string, params map[str
 		CellID:     c.cellID,
 		Query:      query,
 		Parameters: params,
+		PageSize:   4096,
 		Cursor:     &cursor,
 	})
 }

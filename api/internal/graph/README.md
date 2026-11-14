@@ -40,7 +40,7 @@ error strings and `Config.String()` are covered by redaction tests.
 | `count(*)` | ✅ | ✅ (`count(n)` rejected) |
 | Writes | transport works, but server only accepts **UNWIND batch mutation form** | same; single-shot write patterns are rejected |
 | Node upsert | `UNWIND $rows AS row MERGE (n {id: row.id}) SET n:Label, …` (labels via `SET`, pattern matches only id) | identical |
-| Edge create | `UNWIND $rows AS row MATCH (a:Label {id: row.src}), (b:Label {id: row.dst}) CREATE (a)-[:TYPE {id: row.rid, …}]->(b)` (endpoints need exactly one label; relationship requires `id: row.<field>`) | identical |
+| Edge upsert/replay | `UNWIND $rows AS row MATCH (a:Label {id: row.src}), (b:Label {id: row.dst}) MERGE (a)-[r:TYPE {id: row.rid}]->(b) SET r.prop = row.prop` (verified across separate requests in Phase 2/3; endpoints need exactly one label) | identical |
 | Delete | `UNWIND $rows AS row MATCH (n {id: row.id}) DETACH DELETE n` | identical |
 | Inline lists (`UNWIND [1,2,3]`) | ❌ batch input must be a parameter | ❌ |
 | Pagination / continuation | driver cursor (PULL/DISCARD) | body fields `page_size` + `cursor`; continuation re-sends the same body with `query_id` + `cursor` (= `next_cursor`) |
@@ -58,6 +58,10 @@ Known runtime quirks (documented as Phase 0 deviations):
 
 - A relationship read immediately after a batch edge write was observed empty
   once (visible on retry) — the integration test retries for up to 3 s.
+- Batched relationship `CREATE` is not replay-safe across separate requests in
+  the verified build; use deterministic relationship ids with the batch
+  `MERGE` form above. This is runtime evidence, not a claim of a general
+  relationship uniqueness constraint.
 - Unknown graph → `403` envelope; unknown cell → `500` envelope.
 - `POST /healthz` → 405 (GET only); admin `/readyz` → 200 with empty body.
 

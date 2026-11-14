@@ -52,6 +52,12 @@ type Batch struct {
 	Edges []Edge
 }
 
+// NodeRef creates a dependency reference for an edge. It intentionally has no
+// properties and is never sent as a node write.
+func NodeRef(label, gid string) Node {
+	return Node{Label: label, GID: gid, ID: NumericID(gid)}
+}
+
 // TenderRecord is the source-backed procurement tender subset used in Phase 2.
 type TenderRecord struct {
 	ID               int64
@@ -200,7 +206,7 @@ func BuildVerticalSlice(t TenderRecord, bids []BidRecord, vendor *VendorRecord, 
 	if orgNorm == "" {
 		orgNorm = NormalizeName(t.Organization)
 	}
-	tender, err := tenderNode(t, syncedAtMS)
+	tender, err := TenderNode(t, syncedAtMS)
 	if err != nil {
 		return Batch{}, err
 	}
@@ -227,7 +233,7 @@ func BuildVerticalSlice(t TenderRecord, bids []BidRecord, vendor *VendorRecord, 
 
 	bidNodes := make([]Node, 0, len(bids))
 	for _, b := range bids {
-		n, nerr := bidNode(b, syncedAtMS)
+		n, nerr := BidNode(b, syncedAtMS)
 		if nerr != nil {
 			return Batch{}, nerr
 		}
@@ -243,7 +249,7 @@ func BuildVerticalSlice(t TenderRecord, bids []BidRecord, vendor *VendorRecord, 
 	}
 
 	if vendor != nil && vendor.ID != 0 {
-		vn, nerr := vendorNode(*vendor, syncedAtMS)
+		vn, nerr := VendorNode(*vendor, syncedAtMS)
 		if nerr != nil {
 			return Batch{}, nerr
 		}
@@ -258,7 +264,7 @@ func BuildVerticalSlice(t TenderRecord, bids []BidRecord, vendor *VendorRecord, 
 	}
 
 	if award != nil && (strings.TrimSpace(award.AwardeeName) != "" || strings.TrimSpace(award.WinningBidNumber) != "") {
-		an, nerr := awardNode(*award, syncedAtMS)
+		an, nerr := AwardNode(*award, syncedAtMS)
 		if nerr != nil {
 			return Batch{}, nerr
 		}
@@ -358,11 +364,11 @@ func BuildCoBidObservations(bids []BidRecord, syncedAtMS int64) ([]Node, []Edge,
 				return nil, nil, err
 			}
 			nodes = append(nodes, on)
-			ln, lerr := bidNode(left, syncedAtMS)
+			ln, lerr := BidNode(left, syncedAtMS)
 			if lerr != nil {
 				return nil, nil, lerr
 			}
-			rn, rerr := bidNode(right, syncedAtMS)
+			rn, rerr := BidNode(right, syncedAtMS)
 			if rerr != nil {
 				return nil, nil, rerr
 			}
@@ -383,7 +389,8 @@ func BuildCoBidObservations(bids []BidRecord, syncedAtMS int64) ([]Node, []Edge,
 	return nodes, edges, nil
 }
 
-func tenderNode(t TenderRecord, synced int64) (Node, error) {
+// TenderNode projects a Tender source row without any dependent records.
+func TenderNode(t TenderRecord, synced int64) (Node, error) {
 	p := map[string]any{"tender_id": t.ExternalID, "organization": t.Organization, "lifecycle_stage": t.LifecycleStage, "website_url": t.WebsiteURL}
 	put(p, "title", t.Title)
 	put(p, "category", t.Category)
@@ -400,7 +407,8 @@ func tenderNode(t TenderRecord, synced int64) (Node, error) {
 	return NewNode("Tender", GID("TENDER", "v", strconv.FormatInt(t.ID, 10)), "tenders", strconv.FormatInt(t.ID, 10), synced, p)
 }
 
-func bidNode(b BidRecord, synced int64) (Node, error) {
+// BidNode projects a tender_participants source row.
+func BidNode(b BidRecord, synced int64) (Node, error) {
 	p := map[string]any{"bid_number": b.BidNumber, "participant_name": b.ParticipantName, "participant_normalized": b.ParticipantNormalized, "is_winner": b.IsWinner, "tender_pk": b.TenderID}
 	put(p, "financial_rank", b.FinancialRank)
 	put(p, "technical_status", b.TechnicalStatus)
@@ -411,7 +419,8 @@ func bidNode(b BidRecord, synced int64) (Node, error) {
 	return NewNode("Bid", GID("BID", "v", strconv.FormatInt(b.ID, 10)), "tender_participants", strconv.FormatInt(b.ID, 10), synced, p)
 }
 
-func vendorNode(v VendorRecord, synced int64) (Node, error) {
+// VendorNode projects a contractor_v2 source row.
+func VendorNode(v VendorRecord, synced int64) (Node, error) {
 	p := map[string]any{"business_name": v.BusinessName, "gstin": v.GSTIN}
 	put(p, "legal_status", v.LegalStatus)
 	put(p, "address", v.Address)
@@ -419,7 +428,8 @@ func vendorNode(v VendorRecord, synced int64) (Node, error) {
 	return NewNode("Vendor", GID("VENDOR", "cp", strconv.FormatInt(v.ID, 10)), "contractor_v2", strconv.FormatInt(v.ID, 10), synced, p)
 }
 
-func awardNode(a AwardRecord, synced int64) (Node, error) {
+// AwardNode projects a tender_extracted_meta source row.
+func AwardNode(a AwardRecord, synced int64) (Node, error) {
 	norm := a.AwardeeNormalized
 	if norm == "" {
 		norm = NormalizeName(a.AwardeeName)
