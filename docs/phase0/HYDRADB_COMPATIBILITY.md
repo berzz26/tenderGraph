@@ -36,7 +36,8 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Authentication | Yes — bearer token (Bolt password field); TLS required in deployed envs (`neo4j+s://`, `https://`) | USING-HYDRADB §Connecting | Secrets via `.env`, like existing MINIO_* keys |
 | Node `CREATE` | Yes, but **only as one-hop edge pattern**; bare `CREATE (n {...})` is rejected | cypher-compat §CREATE; USING-HYDRADB §dialect | Ingest nodes via MERGE/UNWIND upsert instead |
 | Node `MERGE` (bare) | Rejected (edge pattern required) | same | Node upsert via `UNWIND $rows MERGE (n {id: row.id}) SET n:Label, n.prop=...` |
-| Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids | USING-HYDRADB §Identity and idempotency | **Stable graph IDs are mandatory and natural here** |
+| Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids; **documented id type is non-negative integers** (cypher-compat §Values); string ids are not documented | USING-HYDRADB §Identity and idempotency; cypher-compat §Values | Vertex id = versioned 63-bit hash of the complete `gid` string (numeric); `gid` kept as a string property (GRAPH_ONTOLOGY §3) |
+| Relationship `MERGE` by `id` property | Documented only in batch form; **uniqueness semantics under-specified — not assumed**; batch edge dedupe on `(src,dst,type)` collapses legitimate multi-edges | USING-HYDRADB idempotency table; cypher-compat §Batches | Application-level idempotency (row-keyed edges, observation nodes); smoke test must confirm MERGE-by-id behavior |
 | Relationship `CREATE` / `MERGE` | Yes; `MERGE` edge is idempotent; plain `CREATE` duplicates edges | USING-HYDRADB idempotency table (3×MERGE→1 edge; 3×CREATE→3 edges) | Use `MERGE` or batched `UNWIND … CREATE` everywhere |
 | `SET` / `REMOVE` | Yes, after a `MATCH`; `id` immutable; labels settable | cypher-compat §SET | Patch provenance/timestamp properties |
 | `DELETE` / `DETACH DELETE` | Yes, after `MATCH` | cypher-compat | Identity rejections, test isolation |
@@ -52,7 +53,7 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Undirected patterns, `[:A\|B]`, `(a)-->(b)` | Rejected (one type, one direction) | USING-HYDRADB §dialect table | Query service enumerates directions client-side |
 | `MATCH` needs anchor | Yes — id, label, or property predicate required | USING-HYDRADB §dialect | Ontology mandates labels on every node |
 | Label-anchored counts | Yes — but only if **every source node carries the label** | USING-HYDRADB verified caveat | Ingestion writes labels in the same batch |
-| `UNWIND` batch writes | Yes, parameter-driven list of maps; **cap 1024 items**; edge batch `UNWIND … CREATE` is idempotent on (src,dst,type); node batch is `UNWIND … MERGE (n {id}) SET n:Label, props` | cypher-compat §Batches; USING-HYDRADB §Batch writes | **Primary ingestion path** (chunk 1000) |
+| `UNWIND` batch writes | Yes, parameter-driven list of maps; **cap 1024 items**; edge batch `UNWIND … CREATE` is idempotent on (src,dst,type); node batch is `UNWIND … MERGE (n {id}) SET n:Label, props` | cypher-compat §Batches; USING-HYDRADB §Batch writes | **Primary ingestion path** (chunk 1000). Note: the `(src,dst,type)` dedupe collapses multi-edges — co-bid evidence is node-based (`CoBidObservation`), not `Bid→Bid` edges |
 | `UNWIND` inline lists / batch reads | Parameter only; batched read has fixed 2-column projection | same | Bulk loader design |
 | Transactions | **None** — auto-commit only; `BEGIN/COMMIT/ROLLBACK` rejected | architecture §Client Boundary; USING-HYDRADB §Transactions | Write idempotency via MERGE semantics + PK-watermarked re-runs |
 | Query parameters | Scalars everywhere; lists only as UNWIND input | cypher-compat §Values | Projection batches pass row maps |
@@ -66,7 +67,7 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Native `algo.MSpaths` | Yes — server-side many-to-many via `sourceLabel/sourceProperty/sourceValues` (**lists of strings only, inlined**, not parameters), `targetValues`, `pairwise` (default unspecified — set explicitly), `resultLimit`; pairs with no path are omitted | USING-HYDRADB §Path queries | Vendor network investigations at scale |
 | `algo.degree` | Yes — degree ranking per label, `relDirection` incl. `undirected`, `neighborLabel`, `minDegree`, `limit` | README §Querying | Hub-vendor detection |
 | Multi-type traversal in one MATCH | No (one type per pattern) — but `algo.*` `relTypes` accepts several | USING-HYDRADB §Path queries | Path algorithms handle cross-type paths |
-| Vector search / embeddings | No graph-side vector search. **DB already has pgvector** (`boq_items.item_description_embedding`, `embeddings_title_desc`) | DATABASE_AUDIT | Semantic BOQ matching stays in PostgreSQL |
+| Vector search / embeddings | **NOT AVAILABLE IN VERIFIED TARGET.** The open-source engine (`hydra-db/hydradb` main, 741 repo paths scanned 2026-11-14) contains **zero vector/embedding code paths** (no vector, hnsw, faiss, ann modules or procedures documented). The commercial product (hydradb.com) markets graph-memory/hybrid-retrieval capability — **PRODUCT/ECOSYSTEM CLAIM ONLY**, not present in the verified self-hosted target | OSS repo tree scan (verified absence) + hydradb.com (marketing claim only) | No vector features assumed from HydraDB. Semantic BOQ matching stays in **PostgreSQL pgvector** (`boq_items.item_description_embedding`, `embeddings_title_desc`) — existing embeddings are preserved, not migrated. The no-separate-vector-DB decision rests on PostgreSQL pgvector + the relationship-driven question set, **not** on any HydraDB capability |
 | Full-text search | No (`CONTAINS` rejected) | cypher-compat §Not supported | Name search stays in PostgreSQL (pg_trgm) |
 | Graph algorithms beyond paths/degree | No (no PageRank, community detection, etc. in the procedures documented) | docs reviewed | Compute in app layer from projection data |
 | Schema/constraints (uniqueness, existence) | None documented — only `id` upsert semantics | docs reviewed | Enforce at ingestion + PostgreSQL control tables |
@@ -80,40 +81,56 @@ database = graph id) or HTTP with `cell_id` mandatory on every request.
 
 ### 3.1 Node upsert with label + properties (batch)
 ```cypher
-UNWIND $rows AS row MERGE (n {id: row.gid})
-SET n:Vendor, n.name = row.name, n.gstin = row.gstin, n.updated_at = row.updated_at
+UNWIND $rows AS row MERGE (n {id: row.id})
+SET n:Vendor, n.gid = row.gid, n.name = row.name, n.gstin = row.gstin, n.updated_at_ms = row.updated_at_ms
 ```
 - `$rows` is a list of maps passed as a **parameter** (Go driver value), ≤1000 items per call.
+- `row.id` is the **numeric** vertex id (versioned 63-bit hash of the complete `gid` string —
+  GRAPH_ONTOLOGY §3); the gid string rides along as the `gid` property. **String ids are not
+  documented** for HydraDB and are not used.
 - Label must come first in `SET`. Running over existing ids is a safe re-label/property patch.
+- Pre-write collision check (existing node at that `id` must carry the same `gid`) happens in
+  the projector before dispatch.
 
-### 3.2 Edge batch (idempotent)
+### 3.2 Edge batch (row-keyed, replay-safe)
 ```cypher
 UNWIND $rows AS row
   MATCH (t:Tender {id: row.t}), (v:Vendor {id: row.v})
-  MERGE (v)-[r:PARTICIPATED_IN {id: row.rid}]->(t)
-  SET r.fiscal_year = row.fy
+  CREATE (v)-[:CONTRACTOR_ON_RECORD {src_table: 'tenders', src_pk: row.pk}]->(t)
 ```
-or, for pure seeding where (src,dst,type) dedupe suffices:
+or, where per-source-row relationship identity is required and MERGE-by-`id` on
+relationships is being used (documented batch form; **uniqueness semantics under-specified —
+confirm in the smoke test before relying on it**):
 ```cypher
-UNWIND $rows AS row CREATE (a {id: row.src})-[:PARTICIPATED_IN]->(b {id: row.dst})
+UNWIND $rows AS row
+  MATCH (t:Tender {id: row.t}), (v:Vendor {id: row.v})
+  MERGE (v)-[r:CONTRACTOR_ON_RECORD {id: row.rid}]->(t)
+  SET r.src_pk = row.pk
 ```
 - Edge batch creates endpoint records if absent (**unlabelled** — run the node batch first).
 - Ordering rule: labels/properties batch → edge batch (avoids unlabelled windows).
+- Plain batch `CREATE` duplicates nothing only because the batch dedupes on
+  `(src,dst,type)`; that same dedupe collapses legitimate multi-edges — which is why
+  multi-observation facts (co-bids) are `CoBidObservation` **nodes** (3.3), not edges.
 
-### 3.3 Bounded multi-hop MATCH (network fan-out)
+### 3.3 Bounded multi-hop MATCH (co-bid network via observation nodes)
 ```cypher
-MATCH (v:Vendor {id: $vid})-[:PARTICIPATED_IN]->(t:Tender)<-[:PARTICIPATED_IN]-(o:Vendor)
-WHERE o.id <> $vid
-RETURN o.id AS other_id, o.name AS other_name, count(*) AS co_bids
-ORDER BY co_bids DESC, other_id ASC LIMIT 25
+MATCH (b:Bid {id: $bidId})-[:CO_BID_IN]->(o:CoBidObservation)<-[:CO_BID_IN]-(other:Bid)
+WHERE other.id <> $bidId
+RETURN other.id AS other_id, other.participant_normalized AS other_name, count(o) AS shared_tenders
+ORDER BY shared_tenders DESC, other_id ASC LIMIT 25
 ```
+Each shared tender is one `CoBidObservation`, so `count(o)` preserves per-tender evidence
+(a `(src,dst,type)`-deduped direct edge could not).
 
 ### 3.4 Bounded variable-length path
 ```cypher
-MATCH (a:Vendor {id: $vid})-[:CO_BID_WITH*1..3]->(b:Vendor)
-WHERE b.id <> $vid
-RETURN DISTINCT b.id AS reached, b.name AS name ORDER BY name LIMIT 200
+MATCH (a:Bid {id: $bidId})-[:CO_BID_IN*2..4]->(b:Bid)
+WHERE b.id <> $bidId
+RETURN DISTINCT b.id AS reached, b.participant_normalized AS name ORDER BY name LIMIT 200
 ```
+(`CO_BID_IN` edges run `Bid→CoBidObservation`; other bids are reached at even hop counts,
+hence the `2..4` bound.)
 
 ### 3.5 OPTIONAL MATCH (may have no financials)
 ```cypher
@@ -126,9 +143,11 @@ RETURN ce.canonical_name AS name, fs.revenue AS revenue
 ### 3.6 Grouped aggregation / leaderboard
 ```cypher
 MATCH (v:Vendor)-[r:WON]->(a:Award)
-RETURN a.fiscal_year AS fy, count(*) AS awards, sum(r.value_inr) AS value
+RETURN a.fiscal_year AS fy, count(*) AS awards, sum(a.awarded_value_inr) AS value
 ORDER BY value DESC LIMIT 20
 ```
+(`sum` runs on the float analytics property; exact monetary arithmetic stays in
+PostgreSQL/Go decimal code — money policy, DECISIONS D13.)
 
 ### 3.7 Native path procedure (contract→capital)
 ```cypher
@@ -148,12 +167,14 @@ CALL algo.MSpaths({
   sourceLabel: 'Vendor', sourceProperty: 'name',
   sourceValues: ['Alpha Infra Ltd', 'Beta Constructions Pvt Ltd'],
   targetValues: ['Alpha Infra Ltd', 'Beta Constructions Pvt Ltd'],
-  relTypes: ['CO_BID_WITH'], relDirection: 'both',
+  relTypes: ['CO_BID_IN'], relDirection: 'outgoing',
   maxLen: 2, pathCount: 1, pairwise: false, resultLimit: 200
 })
 YIELD path
 RETURN path
 ```
+- `sourceLabel: 'Bid'`, `sourceProperty: 'participant_normalized'` in this corrected shape:
+  co-bid paths run `Bid→CoBidObservation→Bid`, so `maxLen: 2` with outgoing direction.
 - Values must be a list of **strings**, inlined with manual escaping; set `pairwise` explicitly;
   pairs with no path are silently omitted — join results back by endpoint ids.
 
@@ -169,9 +190,11 @@ UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
 
 ## 4. Application-level functionality we must implement (not native)
 
-1. **Deduplication guarantees**: only `(src,dst,type)` batch dedupe exists; relationship
-   identity per source row is our responsibility — carry a unique `id`/`src_pk` relationship
-   property and make ingestion MERGE by it (verified MERGE edge semantics).
+1. **Relationship identity / idempotency**: only `(src,dst,type)` batch dedupe is documented;
+   relationship `MERGE`-by-`id` is documented only in batch form and its uniqueness semantics
+   are **under-specified**. Idempotency is our responsibility: deterministic row-keyed edges,
+   `CoBidObservation` nodes for multi-observation facts, replay-safe batches — not assumed
+   from HydraDB constraints (none are documented).
 2. **Uniqueness beyond `id`** (e.g., one CONFIRMED identity per vendor): enforce in the
    projection engine + PostgreSQL control tables.
 3. **Counting with ambiguity**: `count(DISTINCT …)` rejected, grouped aggregation drops
@@ -192,10 +215,15 @@ UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
 
 | Item | Status |
 |---|---|
+| **String vertex ids** (`MERGE (n {id: <string>)`) | **NOT INVESTIGATED in engine** — docs state node ids are non-negative integers; string id behavior (accept/reject/coerce) must be probed in the smoke test before any reliance. TenderGraph does not use string ids. |
 | `GRAPH_CYPHER_ENGINE=datafusion` variant | Needs investigation before relying on it; documented as rejecting `DETACH DELETE` and some multi-row mutations. We plan to stay on the default `legacy` engine. |
 | `MERGE` edge with extra pattern properties under UNWIND | Documented as rejected for the vertex-upsert shape; edge-MERGE shape shown above is the documented form — verify in smoke test. |
+| Relationship `MERGE`-by-`id` uniqueness on replay | Under-specified in docs; smoke test must prove replay produces exactly one edge per relationship id (spike/hydradb_smoke.md step R). |
+| Bookmark / `strong` consistency behavior | Documented; **runtime-unverified** — smoke test steps B (bookmark round trip) gate any read-your-writes reliance. |
+| Delete behavior (`DETACH DELETE` visibility to subsequent reads) | Documented as supported; runtime-unverified — gates the source-deletion handling decision (ARCHITECTURE §2.6). |
 | Exact behavior of `algo.MSpaths` default `pairwise` | Default unspecified per docs; smoke test to confirm, code sets it explicitly. |
 | Bolt driver version floor in Go driver | Neo4j Go driver v5 targets Bolt ≥5.1 — matches; confirm handshake in smoke test. |
+| Numeric id precision in the Go driver (Bolt int64 vs float coercion) | Neo4j drivers carry integers natively; confirm no conversion loss for 63-bit masked values in the smoke test (step I). |
 | Concurrent-writer behavior during bulk sync | Single-writer per cell by lease; bulk sync is single-threaded per cell by design; further investigation only if we shard cells. |
 | Snapshot/pagination interactions for very long NDJSON exports | Documented (pinned snapshot, consuming cursor, non-retryable pages); robust page loop to be built and tested in Phase 1. |
 
@@ -211,6 +239,12 @@ UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
   `graph-node` replicas + `graph-indexer` workers, TLS, bearer token; Helm chart available.
 - Alternative: `bash scripts/runtime_smoke.sh` builds and exercises Bolt+HTTP on a
   throwaway store (requires Python `neo4j` package).
+- **`pg_hydradb` (PostgreSQL extension, verified from `crates/pg-hydradb/README.md`)**:
+  answers graph queries inside PostgreSQL over existing tables. **Not deployable here**: it
+  requires `shared_preload_libraries` (a server restart) on the shared production PostgreSQL
+  that hosts another live system — out of bounds under the no-destructive-PostgreSQL-change
+  constraint. Recorded as an evaluated alternative only; TenderGraph targets the standalone
+  `graph-node` deployment.
 
 ## 7. Smoke-test status
 

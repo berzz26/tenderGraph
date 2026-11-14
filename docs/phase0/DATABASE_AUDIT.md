@@ -43,7 +43,9 @@ Extensions installed in the DB: `pg_trgm`, `vector` (pgvector). Views present:
   ON DELETE CASCADE), 1:1 `tender_extracted_meta` (FK, CASCADE), 1:1 `tender_parsed_meta`
   (FK, CASCADE), 1:1 `tender_states` (FK, CASCADE), 1:N `tender_files` (FK, CASCADE).
 - **Key insight**: `organization` is free text on the tender, not an FK — buyers are
-  string-identified only. `contractor_v2_id` links 6,656 tenders to a contractor record.
+  string-identified only. `contractor_v2_id` links 6,656 tenders to a contractor record —
+  **a contractor-of-record assignment on the tender row; it is not bid participation and not
+  winner evidence** (see §3.5 and DECISIONS D10).
 
 ### 2.2 `tender_extracted_meta` — Src (scraper-extracted), Phase-1: YES
 - **PK** `id integer`; **Unique FK** `tender_id integer → tenders.id` (verified 1:1).
@@ -67,7 +69,8 @@ Extensions installed in the DB: `pg_trgm`, `vector` (pgvector). Views present:
 - Indexes: `ix_tender_participants_tender_id`, `idx_tender_participant_rank`,
   `idx_tender_participant_name (participant_normalized)`.
 - Cardinality: max observed 85 participants per tender; 733 tender pairs share ≥2 participants
-  (sampled 78,201 co-bid rows in a 500k cap) — **the CO_BID_WITH signal is real and needs care**.
+  (sampled 78,201 co-bid rows in a 500k cap) — **the co-bid signal is real and needs care**
+  (modeled as `CoBidObservation` nodes so per-tender evidence survives dedupe — DECISIONS D12).
 
 ### 2.4 `tender_files` / `tender_file_texts` — Src, Phase-1: files NO (provenance only), texts NO
 - `tender_files`: PK `id`; FK `tender_id → tenders.id` CASCADE; `file_type`, `cloud_file_name`
@@ -128,7 +131,8 @@ Extensions installed in the DB: `pg_trgm`, `vector` (pgvector). Views present:
 - **One GSTIN per contractor row (enforced)**, and 45 distinct contractor GSTINs also appear
   in `entity_gst` — the exact-GSTIN identity evidence bridge the dashboard uses.
 - `tenders.contractor_v2_id` (6,656 tenders) is the only link between tenders and contractor
-  records; it is the award-side buyer's contractor assignment, NOT proof of winner identity.
+  records; it is the award-side contractor-of-record assignment — **NOT proof of bid
+  participation, NOT proof of winner identity, and never winner evidence** (DECISIONS D10).
 
 ### 3.6 `location_meta` — Src lookup, Phase-1: NO (empty)
 - PK `id int`; columns `circle_name, region_name, division_name, office_name, pincode,
@@ -199,6 +203,13 @@ Extensions installed in the DB: `pg_trgm`, `vector` (pgvector). Views present:
   buyer_* fields, `file_url`, scraper state columns.
 - **No FK/link to `tenders`** — GeM contract data is an island; `contract_no` formats do not
   overlap tender ids (verified probe). Dedupe contract rows by `contract_no`.
+- **Seller identity probe (2026-11-14 correction pass, live data)**: **all seller identity
+  fields are empty — 0 non-null of 4,078 rows** for `gem_seller_id`, `gst_in`, `pan`, and
+  `company_name` is also 0 non-null (probe checked non-empty values, distinct counts, and
+  multi-name/multi-GSTIN overlaps: all zero). A `seller_details` row therefore carries **no
+  usable seller identity key**; it is contract-level information only
+  (`contract_no` unique). This grounds the `GemContract`-only baseline (DECISIONS D11) —
+  the earlier per-row `Seller`-node interpretation was inaccurate.
 - 4,078 rows.
 
 ### 6.2 `product_details` — Src, Phase-1: NO (0 rows)

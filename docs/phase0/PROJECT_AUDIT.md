@@ -136,7 +136,7 @@ Alembic (other system).
 | pgxpool bootstrap | `api/internal/db/db.go` `Connect` | direct reuse for the graph sync service's source connection |
 | Env config + .env | `api/internal/cfg/config.go` | extend `Config` with HydraDB/graph fields |
 | Generic row mapper | `srv/server.go` `Query`/`QueryOne`/`normalizeVal` | reuse for source-scan queries |
-| Entity-mapping CTEs | `api/internal/repo/mapping.go`, `repo/awards.go` | source of *confirmed/candidate* identity pairs to seed `IDENTIFIED_AS` edges |
+| Entity-mapping CTEs | `api/internal/repo/mapping.go`, `repo/awards.go` | presentation-time dashboard mapping + **validation baseline** for the graph's identity pipeline (dashboard "mapped" ≠ graph CONFIRMED — analyst-only transitions, GRAPH_ONTOLOGY §4) |
 | Normalization / money / FY SQL fragments | `api/internal/sqlf/sqlf.go` | mandatory reuse in all projections and validations |
 | Sort whitelists | `api/internal/repo/queries.go` | pattern for whitelist style in new query service |
 | L1 intelligence view | `vw_vyuha_l1_intelligence` (DB) | precomputed procurement↔listed-entity intelligence; see DATABASE_AUDIT |

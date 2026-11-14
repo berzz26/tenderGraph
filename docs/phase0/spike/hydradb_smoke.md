@@ -85,6 +85,43 @@ run '{"cell_id":"cell-0","query":"MATCH (n:SmokeTest {id: 999901}) RETURN n.name
 run '{"cell_id":"cell-0","query":"UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n","parameters":{"ids":[999901,999902,999903]}}'
 ```
 
+## Additional steps required by the correction pass (ID / replay / consistency)
+
+The corrected D5/D12/D6 assumptions introduced behaviors that the original 8 steps did not
+exercise. Add the following steps (same disposable id ranges 999910–999930) before the
+cleanup step:
+
+```bash
+# I1. string-id probe — verify string ids are rejected/accepted (docs: ids are non-negative
+#     integers; TenderGraph must not rely on string ids either way)
+run '{"cell_id":"cell-0","query":"MERGE (a:SmokeTest {id: \"gid-str-999910\"}) RETURN a.id AS id"}'
+# I2. numeric-id precision — MERGE a node at a 63-bit masked id and read it back unchanged
+run '{"cell_id":"cell-0","query":"MERGE (a:SmokeTest {id: 4611686018427387903}) SET a:SmokeTest RETURN a.id AS id"}'
+
+# R1. relationship MERGE-by-id replay — run the same edge MERGE 3x, then count
+run '{"cell_id":"cell-0","query":"UNWIND [1,2,3] AS i MATCH (a:SmokeTest {id: 999901}), (b:SmokeTest {id: 999902}) MERGE (a)-[r:SMOKE_RID {id: 555001}]->(b)"}'
+run '{"cell_id":"cell-0","query":"MATCH (a:SmokeTest {id: 999901})-[r:SMOKE_RID]->(b:SmokeTest {id: 999902}) RETURN count(r) AS edge_count"}'
+# EXPECT edge_count == 1 if MERGE-by-id provides replay uniqueness; >1 proves it does not.
+# R2. batch (src,dst,type) collapse demo — same pair+type in two separate batches with
+#     different intended observations; confirms dedupe collapses them (grounds D12):
+run '{"cell_id":"cell-0","query":"UNWIND $rows AS row CREATE (a {id: row.src})-[:SMOKE_MULTI]->(b {id: row.dst})","parameters":{"rows":[{"src":999901,"dst":999902}]}}'
+run '{"cell_id":"cell-0","query":"UNWIND $rows AS row CREATE (a {id: row.src})-[:SMOKE_MULTI]->(b {id: row.dst})","parameters":{"rows":[{"src":999901,"dst":999902}]}}'
+run '{"cell_id":"cell-0","query":"MATCH (a:SmokeTest {id: 999901})-[r:SMOKE_MULTI]->(b) RETURN count(r) AS edge_count"}'
+# EXPECT edge_count == 1 (documented dedupe) — the multi-observation evidence would be lost,
+# which is why co-bids are CoBidObservation NODES (D12).
+
+# B1. bookmark round trip — capture `bookmark` from a mutation response, pass it in the next
+#     read's `bookmark` field, and confirm the read sees the write. Also try
+#     {"consistency":"strong"} once. Gate: no read-your-writes reliance until this passes.
+
+# D1. delete visibility — DETACH DELETE a node, then MATCH for it (bookmark-pinned and
+#     default-consistency): confirm it is gone and that dependent edges are removed.
+#     Gate: source-deletion handling in ARCHITECTURE §2.6 waits for this result.
+```
+
+Cleanup must include the extra ids: `999910`, `4611686018427387903`, and nodes reachable
+from the R1/R2 edges.
+
 Expected observations to record when run:
 - Step 4 returns one row with `{"type":"vertex_id","value":999902}` (docs' verified shape —
   note `vertex_id`, not `integer`).
@@ -92,3 +129,13 @@ Expected observations to record when run:
 - If `MERGE` in step 3 is rejected in this build, fall back to the two-request recipe:
   node batch `UNWIND $rows MERGE (n {id: row.id}) SET n:SmokeTest, n.name = row.name` then
   the edge batch — and update HYDRADB_COMPATIBILITY.md accordingly.
+- I1 result: if string ids are silently accepted or coerced, record it — the numeric-hash
+  convention (D5) stays the decision either way, but the compatibility matrix must reflect
+  actual engine behavior.
+- I2 result: id must come back exactly `4611686018427387903` (no float coercion/precision
+  loss in the HTTP path; repeat over Bolt in Phase 1).
+- R1 result decides whether the projector may use MERGE-by-relationship-id or must rely
+  purely on deterministic row-keyed replay (HYDRADB_COMPATIBILITY §3.2, §5).
+- B1 result gates the §3 data-flow "verify" step and any read-your-writes claim
+  (ARCHITECTURE §3, §6).
+- D1 result gates the deleted-source-row handling decision (ARCHITECTURE §2.6).
