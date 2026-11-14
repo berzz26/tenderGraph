@@ -37,7 +37,7 @@ and the script to run it are documented in `docs/phase0/spike/`.
 | Node `CREATE` | Yes, but **only as one-hop edge pattern**; bare `CREATE (n {...})` is rejected | cypher-compat §CREATE; USING-HYDRADB §dialect | Ingest nodes via MERGE/UNWIND upsert instead |
 | Node `MERGE` (bare) | Rejected (edge pattern required) | same | Node upsert via `UNWIND $rows MERGE (n {id: row.id}) SET n:Label, n.prop=...` |
 | Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids; **documented id type is non-negative integers** (cypher-compat §Values); string ids are not documented | USING-HYDRADB §Identity and idempotency; cypher-compat §Values | Vertex id = versioned 63-bit hash of the complete `gid` string (numeric); `gid` kept as a string property (GRAPH_ONTOLOGY §3) |
-| Relationship `MERGE` by `id` property | Documented only in batch form; **uniqueness semantics under-specified — not assumed**; batch edge dedupe on `(src,dst,type)` collapses legitimate multi-edges | USING-HYDRADB idempotency table; cypher-compat §Batches | Application-level idempotency (row-keyed edges, observation nodes); smoke test must confirm MERGE-by-id behavior |
+| Relationship `MERGE` by `id` property | Documented only in batch form; **Phase 2 live probe verified replay uniqueness across separate requests** for `UNWIND … MATCH … MERGE (a)-[r:T {id: row.rid}]->(b)`; no general relationship constraint is assumed | Phase 2 integration probe against build `0.1.0+916637477f3f`; cypher-compat §Batches | Use deterministic relationship ids with batch MERGE; observation nodes remain required for multi-observation facts |
 | Relationship `CREATE` / `MERGE` | Yes; `MERGE` edge is idempotent; plain `CREATE` duplicates edges | USING-HYDRADB idempotency table (3×MERGE→1 edge; 3×CREATE→3 edges) | Use `MERGE` or batched `UNWIND … CREATE` everywhere |
 | `SET` / `REMOVE` | Yes, after a `MATCH`; `id` immutable; labels settable | cypher-compat §SET | Patch provenance/timestamp properties |
 | `DELETE` / `DETACH DELETE` | Yes, after `MATCH` | cypher-compat | Identity rejections, test isolation |
@@ -212,6 +212,17 @@ UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
    epoch-millis ints (`*_ms`) and ISO strings for display.
 
 ## 5. Unsupported / needs further investigation
+
+### Phase 2 runtime update (2026-11-14)
+
+The Phase 2 vertical-slice integration test ran against the development HydraDB
+instance and verified that the documented batch relationship form
+`UNWIND $rows AS row MATCH ... MERGE (a)-[r:TYPE {id: row.rid}]->(b)`
+returns one relationship after two separate mutation requests with the same
+relationship id. The projector therefore uses deterministic relationship ids
+and relationship `MERGE` for replay. This does not introduce or assume a
+database-wide relationship uniqueness constraint, and it does not change the
+observation-node requirement for legitimate repeated facts.
 
 | Item | Status |
 |---|---|
