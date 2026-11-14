@@ -1,0 +1,221 @@
+# HYDRADB_COMPATIBILITY.md — HydraDB capability matrix (Phase 0)
+
+Investigated 2026-11-14 against the official repository
+`https://github.com/hydra-db/hydradb` (main branch): `README.md`, `USING-HYDRADB.md`,
+`cypher-compat.md`, `architecture.md`. Everything below reflects the **current**
+implementation as documented by the maintainers ("Every behaviour below was verified
+against a running server" — USING-HYDRADB.md). No claim here rests on old Neo4j-fork
+material; HydraDB is an original Rust engine on SlateDB + S3-compatible object storage.
+
+**Environment status (verified on this machine):** HydraDB is **not installed** — no
+`cargo`/`rustc`, no `libcypher-parser`/`libgraphblas` system libraries, no prebuilt image,
+no running node. The smoke test (§7) is therefore NOT EXECUTED; the exact deployment recipe
+and the script to run it are documented in `docs/phase0/spike/`.
+
+## 1. What HydraDB is (verified)
+
+- Object-store-native distributed graph database in Rust: durable graph records in
+  **SlateDB** over S3-compatible storage; query nodes (`graph-node`) and indexer workers
+  (`graph-indexer`) hold only disposable memory/SSD caches.
+- Graph scope = namespace + graph id + **cell** (partition). One durable writer per cell
+  via object-store CAS lease; SlateDB writer epochs fence stale writers.
+- Every query runs against **one pinned SlateDB snapshot**; immutable compressed sparse
+  column (CSC) traversal-index generations are accelerators combined with the WAL overlay,
+  never the source of truth.
+- Clients: **Bolt 5.1–5.4 (official Neo4j drivers work unmodified)** and an HTTP JSON /
+  NDJSON API. Auth = bearer token. Read consistency: `causal` (default) / `strong`, plus
+  bookmarks for read-your-writes. Auto-commit only — **no transactions**.
+
+## 2. Capability matrix
+
+| Capability | Supported | Verification | TenderGraph use |
+|---|---|---|---|
+| Bolt protocol, Neo4j drivers | Yes (Bolt 5.1–5.4, `neo4j://` routing, `bolt://` direct) | README §Querying; USING-HYDRADB §Connecting (Python/JS examples) | Graph query service + ingestion client in Go (`neo4j-go-driver`) |
+| HTTP JSON query API | Yes — `POST /v1/graphs/{graph}/query`, NDJSON streaming | USING-HYDRADB §HTTP query API | Fallback / scripting path; NDJSON for bulk reads |
+| Health / readiness | Yes — `/healthz` on query port (8443), `/readyz` + `/metrics` on admin port (9090) | USING-HYDRADB table | Deployment liveness in compose/k8s |
+| Authentication | Yes — bearer token (Bolt password field); TLS required in deployed envs (`neo4j+s://`, `https://`) | USING-HYDRADB §Connecting | Secrets via `.env`, like existing MINIO_* keys |
+| Node `CREATE` | Yes, but **only as one-hop edge pattern**; bare `CREATE (n {...})` is rejected | cypher-compat §CREATE; USING-HYDRADB §dialect | Ingest nodes via MERGE/UNWIND upsert instead |
+| Node `MERGE` (bare) | Rejected (edge pattern required) | same | Node upsert via `UNWIND $rows MERGE (n {id: row.id}) SET n:Label, n.prop=...` |
+| Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids | USING-HYDRADB §Identity and idempotency | **Stable graph IDs are mandatory and natural here** |
+| Relationship `CREATE` / `MERGE` | Yes; `MERGE` edge is idempotent; plain `CREATE` duplicates edges | USING-HYDRADB idempotency table (3×MERGE→1 edge; 3×CREATE→3 edges) | Use `MERGE` or batched `UNWIND … CREATE` everywhere |
+| `SET` / `REMOVE` | Yes, after a `MATCH`; `id` immutable; labels settable | cypher-compat §SET | Patch provenance/timestamp properties |
+| `DELETE` / `DETACH DELETE` | Yes, after `MATCH` | cypher-compat | Identity rejections, test isolation |
+| `OPTIONAL MATCH` | Yes for reads; rejected in mutations | cypher-compat §Quick reference | Left-outer semantics for missing financials |
+| `WHERE` | `= <> < > <= >= STARTS WITH`, AND/OR/NOT. **No `IN`, `ENDS WITH`, `CONTAINS`, `IS NULL`** | cypher-compat §WHERE | Client-side filtering for the unsupported operators |
+| `RETURN` | Only `<binding>.<property>` or aggregate (`count, sum, avg, collect`); aliases; `DISTINCT` rows; **no arithmetic, no path bindings, no `RETURN *`, no `count(DISTINCT …)`, no `min/max`** | cypher-compat §RETURN | All aggregations planned around this |
+| Grouped aggregation | Yes (implicit GROUP BY, multiple keys); zero-count groups omitted | USING-HYDRADB §What is supported | Leaderboards; default zeros client-side |
+| `ORDER BY / SKIP / LIMIT` | Yes; multiple sort keys supported | same | Pagination + deterministic top-N |
+| `WITH` | Pass-through only (no alias/filter/order) | cypher-compat §WITH | Keep queries single-phase |
+| `UNION / UNION ALL` | Read only, same columns, non-nested | cypher-compat | Multi-shape summaries |
+| Variable-length paths | Yes, **bounded only** (`*1..3`); `*`/`*1..` rejected; range inclusive; cycles revisit nodes | cypher-compat §VLP; USING-HYDRADB §Variable-length | Co-bidder networks, layered paths — always bound |
+| Multi-hop MATCH patterns, comma-joined patterns | Yes | USING-HYDRADB §What is supported | Tender→Bid→Vendor chains |
+| Undirected patterns, `[:A\|B]`, `(a)-->(b)` | Rejected (one type, one direction) | USING-HYDRADB §dialect table | Query service enumerates directions client-side |
+| `MATCH` needs anchor | Yes — id, label, or property predicate required | USING-HYDRADB §dialect | Ontology mandates labels on every node |
+| Label-anchored counts | Yes — but only if **every source node carries the label** | USING-HYDRADB verified caveat | Ingestion writes labels in the same batch |
+| `UNWIND` batch writes | Yes, parameter-driven list of maps; **cap 1024 items**; edge batch `UNWIND … CREATE` is idempotent on (src,dst,type); node batch is `UNWIND … MERGE (n {id}) SET n:Label, props` | cypher-compat §Batches; USING-HYDRADB §Batch writes | **Primary ingestion path** (chunk 1000) |
+| `UNWIND` inline lists / batch reads | Parameter only; batched read has fixed 2-column projection | same | Bulk loader design |
+| Transactions | **None** — auto-commit only; `BEGIN/COMMIT/ROLLBACK` rejected | architecture §Client Boundary; USING-HYDRADB §Transactions | Write idempotency via MERGE semantics + PK-watermarked re-runs |
+| Query parameters | Scalars everywhere; lists only as UNWIND input | cypher-compat §Values | Projection batches pass row maps |
+| Pagination | HTTP: `page_size` (default 1024, max 4096), `cursor`+`query_id`, non-retryable consuming cursors; Bolt driver-native | USING-HYDRADB §Pagination | HTTP NDJSON for big exports; Bolt for interactive |
+| Read consistency `causal`/`strong` + bookmark | Yes | USING-HYDRADB §Read consistency | Sync verification uses bookmark after write |
+| Query cancellation | Yes — `POST /v1/graphs/{g}/queries/{id}/cancel` | USING-HYDRADB §Limits | Long graph queries |
+| Execution budgets | Yes — scanned edges, rows, result vertices, bytes, wall-clock; partial results are NOT returned silently, query fails | architecture §Failure Semantics | Bound all traversals; treat failures explicitly |
+| Property / relationship indexes | Yes — planner-selectable property indexes, reverse adjacency, ordered limit pushdown | architecture §Query Execution | Ontology property conventions; indexer builds CSC automatically |
+| Native `algo.SPpaths` | Yes — `{sourceNode, targetNode, relTypes:[...], relDirection, maxLen, pathCount, weightProp?, costProp?, maxCost?}`; `maxLen` counts **edges**; yields `path, pathWeight, pathCost`; simple paths (no revisits) | README §Native path procedures; cypher-compat §Path procedures; USING-HYDRADB §Path queries | Contract→capital path queries |
+| Native `algo.SSpaths` | Yes — one source, same config minus target; optional `targetLabel/Property/Values` | same | "Who is connected to vendor X" |
+| Native `algo.MSpaths` | Yes — server-side many-to-many via `sourceLabel/sourceProperty/sourceValues` (**lists of strings only, inlined**, not parameters), `targetValues`, `pairwise` (default unspecified — set explicitly), `resultLimit`; pairs with no path are omitted | USING-HYDRADB §Path queries | Vendor network investigations at scale |
+| `algo.degree` | Yes — degree ranking per label, `relDirection` incl. `undirected`, `neighborLabel`, `minDegree`, `limit` | README §Querying | Hub-vendor detection |
+| Multi-type traversal in one MATCH | No (one type per pattern) — but `algo.*` `relTypes` accepts several | USING-HYDRADB §Path queries | Path algorithms handle cross-type paths |
+| Vector search / embeddings | No graph-side vector search. **DB already has pgvector** (`boq_items.item_description_embedding`, `embeddings_title_desc`) | DATABASE_AUDIT | Semantic BOQ matching stays in PostgreSQL |
+| Full-text search | No (`CONTAINS` rejected) | cypher-compat §Not supported | Name search stays in PostgreSQL (pg_trgm) |
+| Graph algorithms beyond paths/degree | No (no PageRank, community detection, etc. in the procedures documented) | docs reviewed | Compute in app layer from projection data |
+| Schema/constraints (uniqueness, existence) | None documented — only `id` upsert semantics | docs reviewed | Enforce at ingestion + PostgreSQL control tables |
+| Date/time property type | Only int/float/bool/string values | cypher-compat §Values | Store timestamps as epoch-millis ints or ISO strings |
+| Multi-statement requests | No (one statement per request) | cypher-compat | Batch via UNWIND |
+
+## 3. Working query examples (validated against the docs' verified examples)
+
+All examples assume Bolt with `neo4j-go-driver` (`neo4j://host:7687`, password = token,
+database = graph id) or HTTP with `cell_id` mandatory on every request.
+
+### 3.1 Node upsert with label + properties (batch)
+```cypher
+UNWIND $rows AS row MERGE (n {id: row.gid})
+SET n:Vendor, n.name = row.name, n.gstin = row.gstin, n.updated_at = row.updated_at
+```
+- `$rows` is a list of maps passed as a **parameter** (Go driver value), ≤1000 items per call.
+- Label must come first in `SET`. Running over existing ids is a safe re-label/property patch.
+
+### 3.2 Edge batch (idempotent)
+```cypher
+UNWIND $rows AS row
+  MATCH (t:Tender {id: row.t}), (v:Vendor {id: row.v})
+  MERGE (v)-[r:PARTICIPATED_IN {id: row.rid}]->(t)
+  SET r.fiscal_year = row.fy
+```
+or, for pure seeding where (src,dst,type) dedupe suffices:
+```cypher
+UNWIND $rows AS row CREATE (a {id: row.src})-[:PARTICIPATED_IN]->(b {id: row.dst})
+```
+- Edge batch creates endpoint records if absent (**unlabelled** — run the node batch first).
+- Ordering rule: labels/properties batch → edge batch (avoids unlabelled windows).
+
+### 3.3 Bounded multi-hop MATCH (network fan-out)
+```cypher
+MATCH (v:Vendor {id: $vid})-[:PARTICIPATED_IN]->(t:Tender)<-[:PARTICIPATED_IN]-(o:Vendor)
+WHERE o.id <> $vid
+RETURN o.id AS other_id, o.name AS other_name, count(*) AS co_bids
+ORDER BY co_bids DESC, other_id ASC LIMIT 25
+```
+
+### 3.4 Bounded variable-length path
+```cypher
+MATCH (a:Vendor {id: $vid})-[:CO_BID_WITH*1..3]->(b:Vendor)
+WHERE b.id <> $vid
+RETURN DISTINCT b.id AS reached, b.name AS name ORDER BY name LIMIT 200
+```
+
+### 3.5 OPTIONAL MATCH (may have no financials)
+```cypher
+MATCH (ce:CorporateEntity {id: $eid})
+OPTIONAL MATCH (ce)-[:HAS_FINANCIAL_STATEMENT]->(fs:FinancialStatement {fiscal_year: $fy})
+RETURN ce.canonical_name AS name, fs.revenue AS revenue
+```
+(count with `count(fs.revenue)`, never `count(*)` after OPTIONAL MATCH.)
+
+### 3.6 Grouped aggregation / leaderboard
+```cypher
+MATCH (v:Vendor)-[r:WON]->(a:Award)
+RETURN a.fiscal_year AS fy, count(*) AS awards, sum(r.value_inr) AS value
+ORDER BY value DESC LIMIT 20
+```
+
+### 3.7 Native path procedure (contract→capital)
+```cypher
+CALL algo.SPpaths({
+  sourceNode: $tenderVertexId, targetNode: $entityVertexId,
+  relTypes: ['HAS_AWARD','WON','IDENTIFIED_AS','HAS_FINANCIAL_STATEMENT'],
+  relDirection: 'outgoing', maxLen: 4, pathCount: 3
+})
+YIELD path, pathWeight, pathCost
+RETURN path, pathWeight, pathCost
+```
+- `relTypes` may list several types (unlike MATCH). `maxLen` counts edges. Paths are simple.
+
+### 3.8 Many-to-many investigation
+```cypher
+CALL algo.MSpaths({
+  sourceLabel: 'Vendor', sourceProperty: 'name',
+  sourceValues: ['Alpha Infra Ltd', 'Beta Constructions Pvt Ltd'],
+  targetValues: ['Alpha Infra Ltd', 'Beta Constructions Pvt Ltd'],
+  relTypes: ['CO_BID_WITH'], relDirection: 'both',
+  maxLen: 2, pathCount: 1, pairwise: false, resultLimit: 200
+})
+YIELD path
+RETURN path
+```
+- Values must be a list of **strings**, inlined with manual escaping; set `pairwise` explicitly;
+  pairs with no path are silently omitted — join results back by endpoint ids.
+
+### 3.9 Read-your-writes after a sync batch
+Take `bookmark` from the mutation response, send it in the next read's `bookmark` field;
+or set `"consistency": "strong"` for a globally fresh read.
+
+### 3.10 Test isolation
+```cypher
+UNWIND $ids AS id MATCH (n {id: id}) DETACH DELETE n
+```
+(`DETACH DELETE` on absent ids is a no-op; batch cap 1024.)
+
+## 4. Application-level functionality we must implement (not native)
+
+1. **Deduplication guarantees**: only `(src,dst,type)` batch dedupe exists; relationship
+   identity per source row is our responsibility — carry a unique `id`/`src_pk` relationship
+   property and make ingestion MERGE by it (verified MERGE edge semantics).
+2. **Uniqueness beyond `id`** (e.g., one CONFIRMED identity per vendor): enforce in the
+   projection engine + PostgreSQL control tables.
+3. **Counting with ambiguity**: `count(DISTINCT …)` rejected, grouped aggregation drops
+   zero groups — compute exact distinct sets client-side where needed.
+4. **Filtering** unsupported in Cypher (`IN/CONTAINS/IS NULL/ENDS WITH`): fetch candidate sets
+   and filter in Go, or keep predicates in PostgreSQL and push only vertex ids to the graph.
+5. **Name/semantic search**: stays in PostgreSQL (pg_trgm + pgvector); the graph answers
+   structural questions.
+6. **Aggregation breadth** (min/max, percentiles, windowed stats): compute in Go or
+   PostgreSQL; graph returns the raw paths/rows.
+7. **Multi-statement atomicity**: sequence batches and verify via bookmarks; design all
+   writes idempotent (auto-commit only).
+8. **Schema governance** (label/property registry, drift detection): a TenderGraph control table.
+9. **Date handling**: property values are scalar types only — normalize all timestamps to
+   epoch-millis ints (`*_ms`) and ISO strings for display.
+
+## 5. Unsupported / needs further investigation
+
+| Item | Status |
+|---|---|
+| `GRAPH_CYPHER_ENGINE=datafusion` variant | Needs investigation before relying on it; documented as rejecting `DETACH DELETE` and some multi-row mutations. We plan to stay on the default `legacy` engine. |
+| `MERGE` edge with extra pattern properties under UNWIND | Documented as rejected for the vertex-upsert shape; edge-MERGE shape shown above is the documented form — verify in smoke test. |
+| Exact behavior of `algo.MSpaths` default `pairwise` | Default unspecified per docs; smoke test to confirm, code sets it explicitly. |
+| Bolt driver version floor in Go driver | Neo4j Go driver v5 targets Bolt ≥5.1 — matches; confirm handshake in smoke test. |
+| Concurrent-writer behavior during bulk sync | Single-writer per cell by lease; bulk sync is single-threaded per cell by design; further investigation only if we shard cells. |
+| Snapshot/pagination interactions for very long NDJSON exports | Documented (pinned snapshot, consuming cursor, non-retryable pages); robust page loop to be built and tested in Phase 1. |
+
+## 6. Deployment requirements (verified from README/USING-HYDRADB)
+
+- Build: Rust 1.99+, C/C++ toolchain, `libcypher-parser`, SuiteSparse GraphBLAS
+  (`just native-check`), `just build` produces `graph-node` and `graph-indexer`.
+- Single dev node env: `CLOUD_PROVIDER=local`, `LOCAL_PATH`, `GRAPH_NAMESPACE`,
+  `GRAPH_ID`, `GRAPH_CELL_ID`, `GRAPH_CELLS`, `GRAPH_NODE_ID`,
+  `GRAPH_BOLT_NODE_ADDRESSES`, `GRAPH_ADVERTISED_BOLT_ADDR`, `GRAPH_DATA_CACHE_DIR`,
+  `GRAPH_AUTH_TOKEN_FILE`, `GRAPH_ALLOW_PLAINTEXT=true`, `RUST_MIN_STACK=33554432`.
+- Production: S3-compatible object storage (MinIO already present in this stack),
+  `graph-node` replicas + `graph-indexer` workers, TLS, bearer token; Helm chart available.
+- Alternative: `bash scripts/runtime_smoke.sh` builds and exercises Bolt+HTTP on a
+  throwaway store (requires Python `neo4j` package).
+
+## 7. Smoke-test status
+
+NOT EXECUTED (see §1 environment status). The complete recipe, environment variables, and a
+ready-to-run script are in `docs/phase0/spike/hydradb_smoke.sh` with the 8-step test sequence
+(connect → node → node → typed relationship → MATCH retrieve → bounded path → property
+verification → delete). Execution is gated on installing the Rust toolchain and native libs
+or on a prebuilt image from the maintainers; it is the first Phase-1 task.
