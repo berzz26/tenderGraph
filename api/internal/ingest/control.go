@@ -188,6 +188,23 @@ func (s ControlStore) ReconciliationRecord(ctx context.Context, dataset, mode, s
 	return err
 }
 
+func (s ControlStore) StartReconciliation(ctx context.Context, dataset, mode string) (int64, error) {
+	var id int64
+	err := s.Pool.QueryRow(ctx, `INSERT INTO tg_reconciliation_runs(dataset_name,mode) VALUES ($1,$2) RETURNING reconciliation_id`, dataset, mode).Scan(&id)
+	return id, err
+}
+
+func (s ControlStore) CheckpointReconciliation(ctx context.Context, reconciliationID int64, cursor Cursor, records int64) error {
+	_, err := s.Pool.Exec(ctx, `UPDATE tg_reconciliation_runs SET cursor_time=$2,cursor_pk=$3,records_scanned=$4,checkpoint_at=now() WHERE reconciliation_id=$1`, reconciliationID, cursor.Time, cursor.PK, records)
+	return err
+}
+
+func (s ControlStore) FinishReconciliation(ctx context.Context, reconciliationID int64, status string, missingNodes, missingEdges, staleNodes, invalidProvenance, duplicateEdges int64, examples []any, errText string) error {
+	b, _ := json.Marshal(examples)
+	_, err := s.Pool.Exec(ctx, `UPDATE tg_reconciliation_runs SET finished_at=now(),status=$2,missing_nodes=$3,missing_edges=$4,stale_nodes=$5,invalid_provenance=$6,duplicate_logical_edges=$7,examples=$8,error=$9 WHERE reconciliation_id=$1`, reconciliationID, status, missingNodes, missingEdges, staleNodes, invalidProvenance, duplicateEdges, b, errText)
+	return err
+}
+
 func (s ControlStore) LastReconciliation(ctx context.Context, dataset string) (map[string]any, error) {
 	var id int64
 	var status, mode string

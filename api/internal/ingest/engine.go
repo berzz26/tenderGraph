@@ -172,6 +172,9 @@ func (e *Engine) RunDataset(ctx context.Context, name, mode string) (RunSummary,
 		if err != nil {
 			return e.failRun(ctx, summary, err)
 		}
+		if err := reconcileChangedRelationships(ctx, name, batch, e.Writer); err != nil {
+			return e.failRun(ctx, summary, err)
+		}
 		batchID, err := e.Control.StartBatch(ctx, runID, name, current, scanned.Items)
 		if err != nil {
 			return e.failRun(ctx, summary, err)
@@ -228,6 +231,52 @@ func (e *Engine) RunDataset(ctx context.Context, name, mode string) (RunSummary,
 		return e.failRun(ctx, summary, err)
 	}
 	return summary, nil
+}
+
+// reconcileChangedRelationships removes obsolete endpoint relationships before
+// the desired batch is written. The operation is intentionally scoped to the
+// source records in this batch, so it cannot perform broad graph deletion.
+func reconcileChangedRelationships(ctx context.Context, dataset string, batch projection.Batch, writer projection.HydraWriter) error {
+	var scopes []projection.EdgeScope
+	seen := map[string]bool{}
+	add := func(typ, from, to string, id int64, side string) {
+		key := fmt.Sprintf("%s:%s:%s:%d:%s", typ, from, to, id, side)
+		if !seen[key] {
+			seen[key] = true
+			scopes = append(scopes, projection.EdgeScope{Type: typ, FromLabel: from, ToLabel: to, EndpointID: id, Side: side})
+		}
+	}
+	for _, node := range batch.Nodes {
+		switch dataset {
+		case "tenders":
+			if node.Label == "Tender" {
+				add("ISSUED_BY", "Tender", "GovernmentOrganization", node.ID, "from")
+				add("CONTRACTOR_ON_RECORD", "Vendor", "Tender", node.ID, "to")
+			}
+		case "tender_participants":
+			if node.Label == "Bid" {
+				add("SUBMITTED_BID", "Bid", "Tender", node.ID, "from")
+				add("CO_BID_IN", "Bid", "CoBidObservation", node.ID, "from")
+			}
+		case "tender_extracted_meta":
+			if node.Label == "Tender" {
+				add("HAS_AWARD", "Tender", "Award", node.ID, "from")
+			}
+			if node.Label == "Award" {
+				add("HAS_AWARD", "Tender", "Award", node.ID, "to")
+				add("WON", "Bid", "Award", node.ID, "to")
+			}
+		case "entity_aliases":
+			if node.Label == "Alias" {
+				add("HAS_ALIAS", "CorporateEntity", "Alias", node.ID, "to")
+			}
+		case "entity_gst":
+			if node.Label == "GstRegistration" {
+				add("HAS_GST_REGISTRATION", "CorporateEntity", "GstRegistration", node.ID, "to")
+			}
+		}
+	}
+	return writer.ReconcileEdges(ctx, batch.Edges, scopes)
 }
 
 func (e *Engine) failRun(ctx context.Context, summary RunSummary, err error) (RunSummary, error) {

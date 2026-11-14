@@ -61,6 +61,10 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 	if high.Empty() {
 		return ReconciliationReport{Dataset: dataset, Status: "SUCCEEDED"}, nil
 	}
+	reconciliationID, err := r.Control.StartReconciliation(ctx, dataset, mode)
+	if err != nil {
+		return ReconciliationReport{Dataset: dataset, Status: "FAILED"}, err
+	}
 	limit := r.BatchSize
 	if limit <= 0 {
 		limit = spec.BatchSize
@@ -73,6 +77,27 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 		expected[label] = map[int64]string{}
 	}
 	report := ReconciliationReport{Dataset: dataset, Status: "SUCCEEDED", Examples: []string{}, Relationships: map[string]RelationshipReconciliation{}, InventoryLimitations: []string{"HydraDB relationship properties are not readable; relationship provenance and deterministic relationship IDs are write-time verified only"}}
+	finished := false
+	defer func() {
+		if !finished {
+			_ = r.Control.FinishReconciliation(context.Background(), reconciliationID, "FAILED", report.MissingNodes, report.MissingEdges, report.StaleNodes, report.InvalidProvenance, report.DuplicateLogicalEdges, stringExamples(report.Examples), report.Error)
+		}
+	}()
+	finish := func(status string, cause error) (ReconciliationReport, error) {
+		report.Status = status
+		if cause != nil {
+			report.Error = cause.Error()
+		}
+		finished = true
+		if finishErr := r.Control.FinishReconciliation(ctx, reconciliationID, status, report.MissingNodes, report.MissingEdges, report.StaleNodes, report.InvalidProvenance, report.DuplicateLogicalEdges, stringExamples(report.Examples), report.Error); finishErr != nil {
+			return reconciliationFailure(report, finishErr)
+		}
+		if cause != nil {
+			return report, cause
+		}
+		return report, nil
+	}
+	fail := func(cause error) (ReconciliationReport, error) { return finish("FAILED", cause) }
 	expectedEdges := map[string]map[string]bool{}
 	shapes := map[string]relationshipShape{}
 	for _, typ := range spec.EdgeTypes {
@@ -86,8 +111,7 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 	for {
 		batch, err := r.Scanner.Scan(ctx, spec, current, high, limit, 0)
 		if err != nil {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, err)
+			return fail(err)
 		}
 		if batch.Items == 0 {
 			break
@@ -95,8 +119,7 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 		report.SourceRecords += int64(batch.Items)
 		b, err := deduplicate(batch.Batch)
 		if err != nil {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, err)
+			return fail(err)
 		}
 		for _, n := range b.Nodes {
 			if _, ok := expected[n.Label]; ok {
@@ -111,8 +134,10 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 		if current.Empty() || current.Less(batch.Cursor) {
 			current = batch.Cursor
 		} else {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, fmt.Errorf("reconciliation cursor did not advance"))
+			return fail(fmt.Errorf("reconciliation cursor did not advance"))
+		}
+		if err := r.Control.CheckpointReconciliation(ctx, reconciliationID, current, report.SourceRecords); err != nil {
+			return fail(fmt.Errorf("checkpoint reconciliation: %w", err))
 		}
 	}
 	for typ, pairs := range expectedEdges {
@@ -121,15 +146,13 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 		for key := range pairs {
 			var src, dst int64
 			if _, err := fmt.Sscanf(key, "%d:%d", &src, &dst); err != nil {
-				report.Status = "FAILED"
-				return reconciliationFailure(report, fmt.Errorf("decode expected %s edge %q: %w", typ, key, err))
+				return fail(fmt.Errorf("decode expected %s edge %q: %w", typ, key, err))
 			}
 			edges = append(edges, projection.Edge{Type: typ, FromLabel: shape.FromLabel, ToLabel: shape.ToLabel, FromID: src, ToID: dst})
 		}
 		check, err := r.Writer.VerifyEdges(ctx, edges)
 		if err != nil {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, err)
+			return fail(err)
 		}
 		rel := RelationshipReconciliation{Expected: int64(check.Expected), Actual: int64(check.Actual), Missing: int64(check.Missing), Stale: int64(check.Unexpected), DuplicateLogical: int64(check.Duplicate), ProvenanceVerification: "unavailable: HydraDB relationship variables are not readable in verified runtime", StaleVerification: "bounded to source-derived endpoint identities; edges from deleted source records require a full runtime inventory"}
 		if rel.Missing > 0 && len(report.Examples) < 20 {
@@ -143,8 +166,7 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 	for label, ids := range expected {
 		missing, invalid, err := r.Writer.VerifyNodes(ctx, label, ids)
 		if err != nil {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, err)
+			return fail(err)
 		}
 		report.InvalidProvenance += int64(invalid)
 		report.MissingNodes += int64(missing)
@@ -153,14 +175,10 @@ func (r Reconciler) Run(ctx context.Context, dataset, mode string) (Reconciliati
 	if mode == "repair" && (report.MissingNodes > 0 || report.MissingEdges > 0 || report.InvalidProvenance > 0) {
 		_, err := (&Engine{Scanner: r.Scanner, Writer: r.Writer, Control: r.Control, Registry: r.Registry, Verify: true, BatchSize: limit}).RunDataset(ctx, dataset, "selected")
 		if err != nil {
-			report.Status = "FAILED"
-			return reconciliationFailure(report, err)
+			return fail(err)
 		}
 	}
-	if err := r.Control.ReconciliationRecord(ctx, dataset, mode, report.Status, report.MissingNodes, report.MissingEdges, report.StaleNodes, report.InvalidProvenance, report.DuplicateLogicalEdges, stringExamples(report.Examples), ""); err != nil {
-		return reconciliationFailure(report, err)
-	}
-	return report, nil
+	return finish("SUCCEEDED", nil)
 }
 
 func relationshipShapeFor(typ string) (relationshipShape, bool) {

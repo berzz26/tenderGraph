@@ -34,9 +34,11 @@ func main() {
 	offset := fs.Int("offset", 0, "review queue offset")
 	reason := fs.String("reason", "", "analyst decision rationale")
 	analyst := fs.String("analyst", "", "analyst identifier, when available")
+	actorKind := fs.String("actor-kind", "OPERATOR_SUPPLIED", "actor kind: AUTHENTICATED|OPERATOR_SUPPLIED|SYSTEM")
 	evidenceJSON := fs.String("evidence-json", "[]", "JSON evidence references")
 	expectedVersion := fs.Int("expected-version", -1, "expected candidate version for optimistic concurrency")
 	requestID := fs.String("request-id", "", "idempotency key for a decision request")
+	dryRun := fs.Bool("dry-run", false, "show projection work without mutating HydraDB")
 	flagArgs, positional := splitArgs(os.Args[2:])
 	_ = fs.Parse(flagArgs)
 	args := positional
@@ -51,8 +53,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer pool.Close()
+	needsGraph := commandNeedsGraph(os.Args[1])
+	if os.Args[1] == "projection" && len(args) > 0 && (args[0] == "apply" && !*dryRun || args[0] == "reconcile") {
+		needsGraph = true
+	}
 	var clients *graph.Clients
-	if commandNeedsGraph(os.Args[1]) {
+	if needsGraph {
 		clients, err = graph.Open(graph.LoadGraphConfig())
 		if err != nil {
 			log.Fatal(err)
@@ -129,7 +135,10 @@ func main() {
 		result, err = review.GetCandidate(ctx, parseID(args[0]))
 	case "decision":
 		requireArgs(args, 1)
-		input := intel.DecisionInput{CandidateID: parseID(args[0]), Status: *status, Rationale: *reason, AnalystID: *analyst, EvidenceRefs: []byte(*evidenceJSON), RequestID: *requestID}
+		if strings.TrimSpace(*analyst) == "" {
+			log.Fatal("--analyst is required; use an authenticated or operator-supplied actor identifier")
+		}
+		input := intel.DecisionInput{CandidateID: parseID(args[0]), Status: *status, Rationale: *reason, AnalystID: *analyst, ActorID: *analyst, ActorKind: *actorKind, EvidenceRefs: []byte(*evidenceJSON), RequestID: *requestID}
 		if *expectedVersion >= 0 {
 			input.ExpectedVersion = expectedVersion
 		}
@@ -137,6 +146,21 @@ func main() {
 	case "history":
 		requireArgs(args, 1)
 		result, err = review.History(ctx, parseID(args[0]))
+	case "projection":
+		requireArgs(args, 1)
+		consumer := intel.ProjectionConsumer{Pool: pool, Graph: graphClient}
+		switch args[0] {
+		case "status":
+			result, err = consumer.Status(ctx)
+		case "list":
+			result, err = consumer.List(ctx, intel.ProjectionFilter{Status: *status, Limit: *limit})
+		case "apply":
+			result, err = consumer.ApplyStatus(ctx, statusOrDefault(*status, "PENDING"), *limit, *dryRun)
+		case "reconcile":
+			result, err = consumer.Reconcile(ctx, *limit)
+		default:
+			log.Fatalf("unknown projection operation %q; use status|list|apply|reconcile", args[0])
+		}
 	default:
 		usage()
 		os.Exit(2)
@@ -161,7 +185,14 @@ func requireArgs(args []string, n int) {
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections|refresh-candidates|review-queue|candidate|decision|history [args]")
+	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections|refresh-candidates|review-queue|candidate|decision|history|projection [args]")
+}
+
+func statusOrDefault(status, fallback string) string {
+	if strings.TrimSpace(status) == "" {
+		return fallback
+	}
+	return strings.ToUpper(strings.TrimSpace(status))
 }
 
 func commandNeedsGraph(command string) bool {

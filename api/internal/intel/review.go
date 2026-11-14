@@ -73,6 +73,8 @@ type DecisionInput struct {
 	Status          string
 	Rationale       string
 	AnalystID       string
+	ActorID         string
+	ActorKind       string
 	EvidenceRefs    json.RawMessage
 	ExpectedVersion *int
 	RequestID       string
@@ -99,6 +101,8 @@ type DecisionHistory struct {
 	PreviousStatus  *string         `json:"previous_status,omitempty"`
 	NewStatus       string          `json:"new_status"`
 	AnalystID       string          `json:"analyst_id,omitempty"`
+	ActorID         string          `json:"actor_id"`
+	ActorKind       string          `json:"actor_kind"`
 	Rationale       string          `json:"rationale"`
 	EvidenceRefs    json.RawMessage `json:"evidence_refs"`
 	DecisionVersion int             `json:"decision_version"`
@@ -124,6 +128,10 @@ func (s ReviewStore) RefreshCandidates(ctx context.Context) (GenerationSummary, 
 		return GenerationSummary{}, err
 	}
 	defer tx.Rollback(ctx)
+	var refreshStarted time.Time
+	if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&refreshStarted); err != nil {
+		return GenerationSummary{}, fmt.Errorf("read database refresh timestamp: %w", err)
+	}
 	summary := GenerationSummary{GeneratorVersion: analystCandidateGeneratorVersion}
 	rows, err := tx.Query(ctx, `
 WITH gst_counts AS (
@@ -194,7 +202,8 @@ FROM matches GROUP BY vendor_id, entity_id ORDER BY vendor_id, entity_id`)
 		_, err = tx.Exec(ctx, `INSERT INTO tg_relationship_candidates
  (candidate_id,candidate_gid,relationship_type,source_type,source_id,source_gid,target_type,target_id,target_gid,generation_method,initial_evidence,latest_evidence,generator_version)
  VALUES ($1,$2,'VENDOR_CORPORATE_ENTITY','Vendor',$3,$4,'CorporateEntity',$5,$6,$7,$8::jsonb,$8::jsonb,$9)
- ON CONFLICT (candidate_gid) DO UPDATE SET latest_evidence=EXCLUDED.latest_evidence,last_evaluated_at=now(),updated_at=now(),generator_version=EXCLUDED.generator_version`,
+
+ ON CONFLICT (candidate_gid) DO UPDATE SET latest_evidence=EXCLUDED.latest_evidence,last_evaluated_at=now(),updated_at=now(),generator_version=EXCLUDED.generator_version,current_status=CASE WHEN tg_relationship_candidates.current_status='STALE' AND tg_relationship_candidates.current_version=0 THEN 'PENDING' ELSE tg_relationship_candidates.current_status END`,
 			candidateID, candidateGID, vendorID, vendorGID, entityID, entityGID, method, evidence, analystCandidateGeneratorVersion)
 		if err != nil {
 			return summary, fmt.Errorf("upsert vendor/entity candidate: %w", err)
@@ -235,12 +244,20 @@ FROM matches GROUP BY vendor_id, entity_id ORDER BY vendor_id, entity_id`)
 		_, err = tx.Exec(ctx, `INSERT INTO tg_relationship_candidates
  (candidate_id,candidate_gid,relationship_type,source_type,source_id,source_gid,target_type,target_id,target_gid,generation_method,initial_evidence,latest_evidence,generator_version)
  VALUES ($1,$2,'TENDER_ANNOUNCEMENT','Tender',$3,$4,'Announcement',$5,$6,$7,$8::jsonb,$8::jsonb,$9)
- ON CONFLICT (candidate_gid) DO UPDATE SET latest_evidence=EXCLUDED.latest_evidence,last_evaluated_at=now(),updated_at=now(),generator_version=EXCLUDED.generator_version`,
+ ON CONFLICT (candidate_gid) DO UPDATE SET latest_evidence=EXCLUDED.latest_evidence,last_evaluated_at=now(),updated_at=now(),generator_version=EXCLUDED.generator_version,current_status=CASE WHEN tg_relationship_candidates.current_status='STALE' AND tg_relationship_candidates.current_version=0 THEN 'PENDING' ELSE tg_relationship_candidates.current_status END`,
 			candidateID, candidateGID, tenderID, tenderGID, announcementID, announcementGID, method, evidence, analystCandidateGeneratorVersion)
 		if err != nil {
 			return summary, fmt.Errorf("upsert tender/announcement candidate: %w", err)
 		}
 		summary.TenderAnnouncementCandidates++
+	}
+	// A refresh is an observation pass, not a rejection decision. Candidates
+	// that were previously pending but were not observed are marked STALE;
+	// confirmed/rejected/needs-review decisions and their evidence remain intact.
+	if _, err := tx.Exec(ctx, `UPDATE tg_relationship_candidates
+SET current_status='STALE', updated_at=now()
+WHERE current_status='PENDING' AND current_version=0 AND last_evaluated_at < $1`, refreshStarted); err != nil {
+		return summary, fmt.Errorf("mark stale candidates: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return summary, err
@@ -314,7 +331,7 @@ func (s ReviewStore) History(ctx context.Context, candidateID int64) ([]Decision
 	if err := s.requirePool(); err != nil {
 		return nil, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT history_id,candidate_id,previous_status,new_status,COALESCE(analyst_id,''),rationale,evidence_refs,decision_version,request_id,created_at FROM tg_relationship_decision_history WHERE candidate_id=$1 ORDER BY decision_version,history_id`, candidateID)
+	rows, err := s.Pool.Query(ctx, `SELECT history_id,candidate_id,previous_status,new_status,COALESCE(analyst_id,''),actor_id,actor_kind,rationale,evidence_refs,decision_version,request_id,created_at FROM tg_relationship_decision_history WHERE candidate_id=$1 ORDER BY decision_version,history_id`, candidateID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +341,7 @@ func (s ReviewStore) History(ctx context.Context, candidateID int64) ([]Decision
 		var h DecisionHistory
 		var previous *string
 		var evidence []byte
-		if err := rows.Scan(&h.HistoryID, &h.CandidateID, &previous, &h.NewStatus, &h.AnalystID, &h.Rationale, &evidence, &h.DecisionVersion, &h.RequestID, &h.CreatedAt); err != nil {
+		if err := rows.Scan(&h.HistoryID, &h.CandidateID, &previous, &h.NewStatus, &h.AnalystID, &h.ActorID, &h.ActorKind, &h.Rationale, &evidence, &h.DecisionVersion, &h.RequestID, &h.CreatedAt); err != nil {
 			return nil, err
 		}
 		h.PreviousStatus = previous
@@ -351,6 +368,20 @@ func (s ReviewStore) Decide(ctx context.Context, input DecisionInput) (DecisionR
 	}
 	if !json.Valid(input.EvidenceRefs) {
 		return DecisionResult{}, errors.New("evidence references must be valid JSON")
+	}
+	input.ActorID = strings.TrimSpace(input.ActorID)
+	if input.ActorID == "" {
+		input.ActorID = strings.TrimSpace(input.AnalystID)
+	}
+	if input.ActorID == "" {
+		return DecisionResult{}, errors.New("actor identifier is required; use an authenticated or operator-supplied identifier")
+	}
+	input.ActorKind = strings.ToUpper(strings.TrimSpace(input.ActorKind))
+	if input.ActorKind == "" {
+		input.ActorKind = "OPERATOR_SUPPLIED"
+	}
+	if input.ActorKind != "AUTHENTICATED" && input.ActorKind != "OPERATOR_SUPPLIED" && input.ActorKind != "SYSTEM" {
+		return DecisionResult{}, fmt.Errorf("invalid actor kind %q", input.ActorKind)
 	}
 	if input.RequestID == "" {
 		input.RequestID = uuid.NewString()
@@ -384,11 +415,11 @@ func (s ReviewStore) Decide(ctx context.Context, input DecisionInput) (DecisionR
 	}
 	version := existingVersion + 1
 	var historyID int64
-	if err := tx.QueryRow(ctx, `INSERT INTO tg_relationship_decision_history(candidate_id,previous_status,new_status,analyst_id,rationale,evidence_refs,decision_version,request_id) VALUES ($1,NULLIF($2,''),$3,NULLIF($4,''),$5,$6::jsonb,$7,$8) RETURNING history_id`, input.CandidateID, existingStatus, input.Status, input.AnalystID, input.Rationale, input.EvidenceRefs, version, input.RequestID).Scan(&historyID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO tg_relationship_decision_history(candidate_id,previous_status,new_status,analyst_id,actor_id,actor_kind,rationale,evidence_refs,decision_version,request_id) VALUES ($1,NULLIF($2,''),$3,$4,$5,$6,$7,$8::jsonb,$9,$10) RETURNING history_id`, input.CandidateID, existingStatus, input.Status, input.ActorID, input.ActorID, input.ActorKind, input.Rationale, input.EvidenceRefs, version, input.RequestID).Scan(&historyID); err != nil {
 		return DecisionResult{}, err
 	}
 	var decisionID int64
-	err = tx.QueryRow(ctx, `INSERT INTO tg_relationship_decisions(candidate_id,decision_status,analyst_id,rationale,evidence_refs,decision_version,request_id) VALUES ($1,$2,NULLIF($3,''),$4,$5::jsonb,$6,$7) ON CONFLICT(candidate_id) DO UPDATE SET decision_status=EXCLUDED.decision_status,analyst_id=EXCLUDED.analyst_id,rationale=EXCLUDED.rationale,evidence_refs=EXCLUDED.evidence_refs,decision_version=EXCLUDED.decision_version,request_id=EXCLUDED.request_id,decided_at=now(),updated_at=now() RETURNING decision_id`, input.CandidateID, input.Status, input.AnalystID, input.Rationale, input.EvidenceRefs, version, input.RequestID).Scan(&decisionID)
+	err = tx.QueryRow(ctx, `INSERT INTO tg_relationship_decisions(candidate_id,decision_status,analyst_id,actor_id,actor_kind,rationale,evidence_refs,decision_version,request_id) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) ON CONFLICT(candidate_id) DO UPDATE SET decision_status=EXCLUDED.decision_status,analyst_id=EXCLUDED.analyst_id,actor_id=EXCLUDED.actor_id,actor_kind=EXCLUDED.actor_kind,rationale=EXCLUDED.rationale,evidence_refs=EXCLUDED.evidence_refs,decision_version=EXCLUDED.decision_version,request_id=EXCLUDED.request_id,decided_at=now(),updated_at=now() RETURNING decision_id`, input.CandidateID, input.Status, input.ActorID, input.ActorID, input.ActorKind, input.Rationale, input.EvidenceRefs, version, input.RequestID).Scan(&decisionID)
 	if err != nil {
 		return DecisionResult{}, err
 	}

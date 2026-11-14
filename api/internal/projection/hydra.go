@@ -39,6 +39,17 @@ type EdgeVerification struct {
 	Unexpected int
 }
 
+// EdgeScope identifies the endpoint side whose existing relationships may
+// have changed in a source batch. It is deliberately bounded to the source
+// records in the current batch; it is not a graph-wide delete operation.
+type EdgeScope struct {
+	Type       string
+	FromLabel  string
+	ToLabel    string
+	EndpointID int64
+	Side       string // "from" or "to"
+}
+
 // VerifyNodes checks an expected node inventory in bounded id batches. It does
 // not scan an entire label, which is important for HydraDB runtimes where a
 // label-wide ordered scan can exceed the HTTP query budget.
@@ -470,6 +481,205 @@ func (w HydraWriter) VerifyEdges(ctx context.Context, edges []Edge) (EdgeVerific
 		}
 	}
 	return total, nil
+}
+
+// ReconcileEdges removes only relationships in the supplied endpoint scopes
+// that are absent from the desired batch. Relationship properties cannot be
+// read in the verified HydraDB runtime, so the deterministic relationship ID
+// is reconstructed from endpoint GIDs and source provenance carried by the
+// endpoint nodes. This is safe because it deletes an exact relationship ID,
+// never all relationships between two endpoints.
+func (w HydraWriter) ReconcileEdges(ctx context.Context, desired []Edge, scopes []EdgeScope) error {
+	if w.Client == nil {
+		return fmt.Errorf("hydra writer: nil client")
+	}
+	if len(scopes) == 0 {
+		return nil
+	}
+	desiredPairs := map[string]map[string]bool{}
+	for _, edge := range desired {
+		if desiredPairs[edge.Type] == nil {
+			desiredPairs[edge.Type] = map[string]bool{}
+		}
+		desiredPairs[edge.Type][edgeKey(edge)] = true
+	}
+	var obsolete []Edge
+	seen := map[int64]bool{}
+	for _, scope := range scopes {
+		for _, v := range []string{scope.Type, scope.FromLabel, scope.ToLabel, scope.Side} {
+			if err := validateIdentifier(v); err != nil && v != "from" && v != "to" {
+				return err
+			}
+		}
+		if scope.Side != "from" && scope.Side != "to" {
+			return fmt.Errorf("edge scope %s has invalid side %q", scope.Type, scope.Side)
+		}
+		q := "MATCH (a:" + scope.FromLabel + ")-[:" + scope.Type + "]->(b:" + scope.ToLabel + ") WHERE "
+		if scope.Side == "from" {
+			q += "a.id = $id"
+		} else {
+			q += "b.id = $id"
+		}
+		q += " RETURN a.id AS src, b.id AS dst, a.gid AS src_gid, b.gid AS dst_gid, a.src_pk AS src_pk, b.src_pk AS dst_pk"
+		res, err := w.Client.DoQuery(ctx, q, map[string]any{"id": scope.EndpointID})
+		if err != nil {
+			return fmt.Errorf("inspect %s relationships for endpoint %d: %w", scope.Type, scope.EndpointID, err)
+		}
+		coTargets := map[int64]bool{}
+		for i := range res.Rows {
+			src, err := res.Int64(i, 0)
+			if err != nil {
+				return err
+			}
+			dst, err := res.Int64(i, 1)
+			if err != nil {
+				return err
+			}
+			pair := fmt.Sprintf("%d:%d", src, dst)
+			if scope.Type == "CO_BID_IN" && scope.Side == "from" {
+				coTargets[dst] = true
+			}
+			if desiredPairs[scope.Type][pair] {
+				continue
+			}
+			srcGID, err := res.String(i, 2)
+			if err != nil {
+				return err
+			}
+			dstGID, err := res.String(i, 3)
+			if err != nil {
+				return err
+			}
+			srcPK, err := res.String(i, 4)
+			if err != nil {
+				return err
+			}
+			dstPK, err := res.String(i, 5)
+			if err != nil {
+				return err
+			}
+			pk := relationshipSourcePK(scope.Type, srcPK, dstPK)
+			table := relationshipSourceTable(scope.Type)
+			if pk == "" || table == "" {
+				return fmt.Errorf("cannot reconstruct %s provenance for %d->%d", scope.Type, src, dst)
+			}
+			edge, err := NewEdge(scope.Type,
+				Node{Label: scope.FromLabel, GID: srcGID, ID: src},
+				Node{Label: scope.ToLabel, GID: dstGID, ID: dst},
+				table, pk, 0, nil)
+			if err != nil {
+				return err
+			}
+			if !seen[edge.RID] {
+				seen[edge.RID] = true
+				obsolete = append(obsolete, edge)
+			}
+		}
+		// When a participant changes tender membership, an obsolete observation
+		// can still have an incoming edge from the other participant. Once an
+		// affected Bid points at that observation, reconcile all incoming edges
+		// to the observation as well.
+		if scope.Type == "CO_BID_IN" && scope.Side == "from" {
+			for observationID := range coTargets {
+				q := "MATCH (a:Bid)-[:CO_BID_IN]->(b:CoBidObservation) WHERE b.id = $id RETURN a.id AS src, b.id AS dst, a.gid AS src_gid, b.gid AS dst_gid, a.src_pk AS src_pk, b.src_pk AS dst_pk"
+				incoming, err := w.Client.DoQuery(ctx, q, map[string]any{"id": observationID})
+				if err != nil {
+					return fmt.Errorf("inspect CO_BID_IN observation %d: %w", observationID, err)
+				}
+				for i := range incoming.Rows {
+					src, err := incoming.Int64(i, 0)
+					if err != nil {
+						return err
+					}
+					dst, err := incoming.Int64(i, 1)
+					if err != nil {
+						return err
+					}
+					if desiredPairs[scope.Type][fmt.Sprintf("%d:%d", src, dst)] {
+						continue
+					}
+					srcGID, err := incoming.String(i, 2)
+					if err != nil {
+						return err
+					}
+					dstGID, err := incoming.String(i, 3)
+					if err != nil {
+						return err
+					}
+					srcPK, err := incoming.String(i, 4)
+					if err != nil {
+						return err
+					}
+					dstPK, err := incoming.String(i, 5)
+					if err != nil {
+						return err
+					}
+					edge, err := NewEdge("CO_BID_IN", Node{Label: "Bid", GID: srcGID, ID: src}, Node{Label: "CoBidObservation", GID: dstGID, ID: dst}, "tender_participants", srcPK, 0, nil)
+					if err != nil {
+						return err
+					}
+					if !seen[edge.RID] {
+						seen[edge.RID] = true
+						obsolete = append(obsolete, edge)
+					}
+					_ = dstPK
+				}
+			}
+		}
+	}
+	return w.DeleteEdges(ctx, obsolete)
+}
+
+// DeleteEdges removes exact deterministic relationship IDs. Current HydraDB
+// accepts this form with anonymous endpoints, while labelled endpoint
+// deletion is not supported by the verified mutation grammar.
+func (w HydraWriter) DeleteEdges(ctx context.Context, edges []Edge) error {
+	if len(edges) == 0 {
+		return nil
+	}
+	for _, group := range groupEdges(edges) {
+		for start := 0; start < len(group.edges); start += 500 {
+			end := start + 500
+			if end > len(group.edges) {
+				end = len(group.edges)
+			}
+			rows := make([]map[string]any, 0, end-start)
+			for _, edge := range group.edges[start:end] {
+				rows = append(rows, map[string]any{"rid": edge.RID})
+			}
+			q := "UNWIND $rows AS row MATCH (a)-[r:" + group.typ + " {id: row.rid}]->(b) DELETE r"
+			if _, err := w.Client.DoQuery(ctx, q, map[string]any{"rows": rows}); err != nil {
+				return fmt.Errorf("delete obsolete %s relationships: %w", group.typ, err)
+			}
+		}
+	}
+	return nil
+}
+
+func relationshipSourceTable(typ string) string {
+	switch typ {
+	case "ISSUED_BY", "CONTRACTOR_ON_RECORD":
+		return "tenders"
+	case "SUBMITTED_BID", "CO_BID_IN", "WON":
+		return "tender_participants"
+	case "HAS_AWARD":
+		return "tender_extracted_meta"
+	case "HAS_ALIAS":
+		return "entity_aliases"
+	case "HAS_GST_REGISTRATION":
+		return "entity_gst"
+	default:
+		return ""
+	}
+}
+
+func relationshipSourcePK(typ, srcPK, dstPK string) string {
+	switch typ {
+	case "CONTRACTOR_ON_RECORD", "HAS_AWARD", "HAS_ALIAS", "HAS_GST_REGISTRATION":
+		return dstPK
+	default:
+		return srcPK
+	}
 }
 
 func edgeKey(e Edge) string { return fmt.Sprintf("%d:%d", e.FromID, e.ToID) }

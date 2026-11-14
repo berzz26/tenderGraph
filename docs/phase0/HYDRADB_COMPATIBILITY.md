@@ -8,14 +8,15 @@ against a running server" — USING-HYDRADB.md). No claim here rests on old Neo4
 material; HydraDB is an original Rust engine on SlateDB + S3-compatible object storage.
 
 **Environment status (updated 2026-11-14):** HydraDB build
-`0.1.0+916637477f3f` is running locally with query HTTP on `127.0.0.1:8443`,
-Bolt on `127.0.0.1:7687`, and admin endpoints on `127.0.0.1:19091`. Health and
-read-only query procedures were exercised against the populated TenderGraph
-graph. Mutation probes currently return HTTP 500 because the local storage
-backend reports `Operation put_opts with mode PutMode::Update not yet implemented
-by LocalFileSystem`; no Phase 6 mutation was attempted. The original deployment
-recipe remains below as reference, and the write smoke test is not rerun while
-the runtime is read-only.
+`0.1.0+916637477f3f` runs locally with query HTTP on `127.0.0.1:8443`,
+Bolt on `127.0.0.1:7687`, and admin endpoints on `127.0.0.1:19091` in the
+current development configuration. The graph-node local-store path is now
+wrapped by TenderGraph's HydraDB-side `SingleWriterLocalStore` adapter: it
+implements conditional update by serializing the path, checking the expected
+ETag/version and using LocalFileSystem's atomic overwrite. Disposable live
+tests verified node and relationship mutation, replay, deletion and persistence
+across restart. The adapter is a single graph-node-writer solution; remote
+stores retain native conditional-update semantics.
 
 ## 1. What HydraDB is (verified)
 
@@ -37,17 +38,17 @@ the runtime is read-only.
 |---|---|---|---|
 | Bolt protocol, Neo4j drivers | Yes (Bolt 5.1–5.4, `neo4j://` routing, `bolt://` direct) | README §Querying; USING-HYDRADB §Connecting (Python/JS examples) | Graph query service + ingestion client in Go (`neo4j-go-driver`) |
 | HTTP JSON query API | Yes — `POST /v1/graphs/{graph}/query`, NDJSON streaming | USING-HYDRADB §HTTP query API | Fallback / scripting path; NDJSON for bulk reads |
-| Health / readiness | Yes — `/healthz` on query port (8443), `/readyz` + `/metrics` on admin port (9090) | USING-HYDRADB table | Deployment liveness in compose/k8s |
+| Health / readiness | Yes — `/healthz` on query port (8443), `/readyz` + `/metrics` on the configured admin port (19091 in the current dev process) | Running graph-node config and live probe | Deployment liveness in compose/k8s |
 | Authentication | Yes — bearer token (Bolt password field); TLS required in deployed envs (`neo4j+s://`, `https://`) | USING-HYDRADB §Connecting | Secrets via `.env`, like existing MINIO_* keys |
 | Node `CREATE` | Yes, but **only as one-hop edge pattern**; bare `CREATE (n {...})` is rejected | cypher-compat §CREATE; USING-HYDRADB §dialect | Ingest nodes via MERGE/UNWIND upsert instead |
 | Node `MERGE` (bare) | Rejected (edge pattern required) | same | Node upsert via `UNWIND $rows MERGE (n {id: row.id}) SET n:Label, n.prop=...` |
 | Node upsert keyed on `id` | Yes — `id` is the identity/upsert key; no auto-generated ids; **documented id type is non-negative integers** (cypher-compat §Values); string ids are not documented | USING-HYDRADB §Identity and idempotency; cypher-compat §Values | Vertex id = versioned 63-bit hash of the complete `gid` string (numeric); `gid` kept as a string property (GRAPH_ONTOLOGY §3) |
-| Relationship `MERGE` by `id` property | Documented only in batch form; **Phase 2 live probe verified replay uniqueness across separate requests** for `UNWIND … MATCH … MERGE (a)-[r:T {id: row.rid}]->(b)`; no general relationship constraint is assumed | Phase 2 integration probe against build `0.1.0+916637477f3f`; cypher-compat §Batches | Use deterministic relationship ids with batch MERGE; observation nodes remain required for multi-observation facts |
-| Relationship `CREATE` / `MERGE` | Batch `MERGE` by deterministic relationship `id` replayed safely across separate requests; plain `CREATE` duplicates relationships across requests | Phase 2/3 live probe against the verified development build | Use deterministic batch `MERGE`; do not use `CREATE` for replayable ingestion |
+| Relationship `MERGE` by `id` property | Documented only in batch form; Phase 2 and Phase 7.5 disposable probes verified replay uniqueness across separate requests for `UNWIND … MATCH … MERGE (a)-[r:T {id: row.rid}]->(b)`; no general relationship constraint is assumed | Phase 2/7.5 probes against the verified source build; cypher-compat §Batches | Use deterministic relationship ids with batch MERGE; observation nodes remain required for multi-observation facts |
+| Relationship `CREATE` / `MERGE` | Batch `MERGE` by deterministic relationship `id` replayed safely across separate requests; plain `CREATE` duplicates relationships across requests | Phase 2/3 populated-graph probe and Phase 7.5 disposable-runtime probe | Use deterministic batch `MERGE`; do not use `CREATE` for replayable ingestion |
 | `SET` / `REMOVE` | Yes, after a `MATCH`; `id` immutable; labels settable | cypher-compat §SET | Patch provenance/timestamp properties |
-| `DELETE` / `DETACH DELETE` | Yes, after `MATCH` | cypher-compat | Identity rejections, test isolation |
+| `DELETE` / `DETACH DELETE` | Yes, after `MATCH`; verified for node cleanup and anonymous-endpoint relationship deletion in the disposable runtime | Disposable runtime probe 2026-11-14 | Test isolation and exact analyst-edge cleanup |
 | `OPTIONAL MATCH` | Yes for reads; rejected in mutations | cypher-compat §Quick reference | Left-outer semantics for missing financials |
-| `WHERE` | `= <> < > <= >= STARTS WITH`, AND/OR/NOT. **No `IN`, `ENDS WITH`, `CONTAINS`, `IS NULL`** | cypher-compat §WHERE | Client-side filtering for the unsupported operators |
+| `WHERE` | `= <> < > <= >= STARTS WITH`, AND/OR/NOT. **No `IN`, `ENDS WITH`, `CONTAINS`, `IS NULL`**; the tested mutation `UNWIND ... MATCH` form also rejects `WHERE` | cypher-compat plus disposable mutation probe | Client-side filtering; exact relationship-property deletes use the supported anonymous-endpoint pattern |
 | `RETURN` | Only `<binding>.<property>` or aggregate (`count, sum, avg, collect`); aliases; `DISTINCT` rows; **no arithmetic, no path bindings, no `RETURN *`, no `count(DISTINCT …)`, no `min/max`** | cypher-compat §RETURN | All aggregations planned around this |
 | Grouped aggregation | Yes (implicit GROUP BY, multiple keys); zero-count groups omitted | USING-HYDRADB §What is supported | Leaderboards; default zeros client-side |
 | `ORDER BY / SKIP / LIMIT` | Yes; multiple sort keys supported | same | Pagination + deterministic top-N |
@@ -229,7 +230,7 @@ observation-node requirement for legitimate repeated facts.
 | `MERGE` edge with extra pattern properties under UNWIND | Edge-MERGE with `{id: row.rid}` and a separate `SET` is verified in the Phase 2/3 live projection. |
 | Relationship `MERGE`-by-`id` uniqueness on replay | Verified across separate requests in the Phase 2/3 live projection for the target build; not promoted to a general database constraint. |
 | Bookmark / `strong` consistency behavior | Documented; **runtime-unverified** — smoke test steps B (bookmark round trip) gate any read-your-writes reliance. |
-| Delete behavior (`DETACH DELETE` visibility to subsequent reads) | Documented as supported; runtime-unverified — gates the source-deletion handling decision (ARCHITECTURE §2.6). |
+| Delete behavior (`DETACH DELETE` visibility to subsequent reads) | Verified for disposable test-owned nodes; source deletion remains non-automatic unless a reliable source deletion signal exists. |
 | Exact behavior of `algo.MSpaths` default `pairwise` | Default unspecified per docs; smoke test to confirm, code sets it explicitly. |
 | Bolt driver version floor in Go driver | Neo4j Go driver v5 targets Bolt ≥5.1 — matches; confirm handshake in smoke test. |
 | Numeric id precision in the Go driver (Bolt int64 vs float coercion) | Neo4j drivers carry integers natively; confirm no conversion loss for 63-bit masked values in the smoke test (step I). |
