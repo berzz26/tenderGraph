@@ -22,7 +22,7 @@ func TestLoadGraphConfigDefaults(t *testing.T) {
 	if c.HTTPAddr != "http://127.0.0.1:8443" {
 		t.Errorf("http default = %q", c.HTTPAddr)
 	}
-	if c.AdminAddr != "http://127.0.0.1:19090" {
+	if c.AdminAddr != "http://127.0.0.1:19091" {
 		t.Errorf("admin default = %q (verified running instance)", c.AdminAddr)
 	}
 	if c.Database != "default" || c.Namespace != "default" || c.CellID != "cell-0" {
@@ -87,10 +87,10 @@ func TestRedactURLStripsUserinfo(t *testing.T) {
 
 func TestBoltSchemeless(t *testing.T) {
 	for in, want := range map[string]string{
-		"127.0.0.1:7687":     "127.0.0.1:7687",
-		"bolt://h:7687":      "h:7687",
-		"neo4j://h:7687":     "h:7687",
-		"neo4j+s://h":        "h",
+		"127.0.0.1:7687": "127.0.0.1:7687",
+		"bolt://h:7687":  "h:7687",
+		"neo4j://h:7687": "h:7687",
+		"neo4j+s://h":    "h",
 	} {
 		c := Config{BoltAddr: in}
 		if got := c.boltSchemeless(); got != want {

@@ -26,7 +26,7 @@ keeps working when HydraDB is down. This package is used stand-alone
 ## Configuration
 
 See `api/graph.env.example`. Defaults: Bolt `127.0.0.1:7687`, HTTP
-`http://127.0.0.1:8443`, admin `http://127.0.0.1:19090`, database/namespace
+`http://127.0.0.1:8443`, admin `http://127.0.0.1:19091`, database/namespace
 `default`, cell `cell-0`. The token comes from `HYDRADB_AUTH_TOKEN` or
 (preferred) `HYDRADB_AUTH_TOKEN_FILE`. Tokens are never logged; all package
 error strings and `Config.String()` are covered by redaction tests.

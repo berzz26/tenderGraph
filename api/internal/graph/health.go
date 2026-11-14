@@ -21,7 +21,7 @@ type Prober interface {
 // (HydraDB reports readiness AND Bolt actually handshakes AND a real query
 // executes). A reachable port alone is never sufficient.
 type HealthChecker struct {
-	adminURL    string // e.g. http://127.0.0.1:19090
+	adminURL    string // e.g. http://127.0.0.1:19091
 	httpBase    string // e.g. http://127.0.0.1:8443
 	token       string
 	namespace   string
@@ -51,11 +51,11 @@ func NewHealthChecker(cfg Config, bolt Prober) *HealthChecker {
 
 // Component is one dependency probe result.
 type Component struct {
-	Name    string `json:"name"`
-	OK      bool   `json:"ok"`
-	Reachable bool `json:"reachable"` // transport-level: something answered
-	Detail  string `json:"detail,omitempty"`
-	Elapsed time.Duration `json:"-"`
+	Name      string        `json:"name"`
+	OK        bool          `json:"ok"`
+	Reachable bool          `json:"reachable"` // transport-level: something answered
+	Detail    string        `json:"detail,omitempty"`
+	Elapsed   time.Duration `json:"-"`
 }
 
 // Report is the aggregate health result.

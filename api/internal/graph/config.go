@@ -11,7 +11,7 @@ import (
 // never logged: String() redacts the auth token (see log.go).
 //
 // Defaults match the verified running development instance
-// (graph-node 0.1.0+916637477f3f, admin port 19090).
+// (graph-node 0.1.0+916637477f3f, admin port 19091).
 type Config struct {
 	// BoltAddr is host:port for the Bolt endpoint (Neo4j driver as Bolt client).
 	BoltAddr string
@@ -41,7 +41,7 @@ func LoadGraphConfig() Config {
 	c := Config{
 		BoltAddr:          envOr("HYDRADB_BOLT_ADDR", "127.0.0.1:7687"),
 		HTTPAddr:          envOr("HYDRADB_HTTP_ADDR", "http://127.0.0.1:8443"),
-		AdminAddr:         envOr("HYDRADB_ADMIN_ADDR", "http://127.0.0.1:19090"),
+		AdminAddr:         envOr("HYDRADB_ADMIN_ADDR", "http://127.0.0.1:19091"),
 		Database:          envOr("HYDRADB_DATABASE", "default"),
 		Namespace:         envOr("HYDRADB_NAMESPACE", "default"),
 		CellID:            envOr("HYDRADB_CELL_ID", "cell-0"),
