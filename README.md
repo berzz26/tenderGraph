@@ -93,11 +93,11 @@ A co-bidding observation is represented as its own graph node, connected to the 
 Benchmark results across six investigation workloads, comparing native HydraDB queries, PostgreSQL queries and the Go application. Each workload was run for 30 samples; figures below are warm p50 latency.
 
 | Investigation workload | PostgreSQL | HydraDB |
-| --- | ---: | ---: | ---: |
-| One-hop co-bidders | 77.43 ms | 1.179 ms | 
-| Multi-hop, depth 2 | 45.10 ms | 2.282 ms | 
-| Multi-hop, depth 3 | 45.08 ms | 4.359 ms | 
-| Pair co-bidding history | 77.12 ms | 0.079 ms | 
+| --- | ---: | ---: |
+| One-hop co-bidders | 77.43 ms | 1.179 ms |
+| Multi-hop, depth 2 | 45.10 ms | 2.282 ms |
+| Multi-hop, depth 3 | 45.08 ms | 4.359 ms |
+| Pair co-bidding history | 77.12 ms | 0.079 ms |
 | Corporate GST registrations | 62.49 ms | 0.225 ms |
 
 
