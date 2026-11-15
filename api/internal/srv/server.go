@@ -26,6 +26,7 @@ type Server struct {
 	Intel      intel.Service
 	Review     intel.ReviewStore
 	Projection intel.ProjectionConsumer
+	Ranking    intel.RankingStore
 	Graph      *graph.Clients
 }
 
@@ -37,6 +38,7 @@ func New(pool *pgxpool.Pool, gc *graph.Clients) *Server {
 	s.Intel.Pool = pool
 	s.Review.Pool = pool
 	s.Projection.Pool = pool
+	s.Ranking.Pool = pool
 	if gc != nil {
 		s.Projection.Graph = gc.HTTP
 	}

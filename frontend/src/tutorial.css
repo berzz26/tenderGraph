@@ -1,0 +1,165 @@
+.tutorial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.tutorial-scrim {
+  position: absolute;
+  inset: 0;
+  background: #10223322;
+  pointer-events: none;
+}
+.tutorial-spotlight {
+  position: fixed;
+  z-index: 21;
+  border: 2px solid var(--amber);
+  border-radius: 5px;
+  box-shadow: 0 0 0 9999px #1022333b;
+  pointer-events: none;
+  transition:
+    top 0.2s,
+    left 0.2s,
+    width 0.2s,
+    height 0.2s;
+}
+.tutorial-card {
+  position: fixed;
+  left: 28px;
+  right: auto;
+  top: auto;
+  bottom: 28px;
+  z-index: 22;
+  width: min(390px, calc(100vw - 56px));
+  background: #fff;
+  border: 1px solid #c9d0d5;
+  box-shadow: 0 18px 50px #1722312b;
+  padding: 22px;
+  pointer-events: auto;
+}
+.tutorial-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--blue);
+  font: 10px var(--mono);
+  letter-spacing: 0.09em;
+}
+.tutorial-top button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px;
+}
+.tutorial-progress {
+  height: 3px;
+  background: #edf0ef;
+  margin: 16px 0 22px;
+}
+.tutorial-progress i {
+  display: block;
+  height: 100%;
+  background: var(--amber);
+  transition: width 0.2s;
+}
+.tutorial-card h2 {
+  font: 700 27px var(--serif);
+  margin: 0 0 10px;
+}
+.tutorial-card p {
+  color: var(--ink2);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+.tutorial-detail {
+  margin-top: 12px !important;
+  padding: 11px;
+  background: #f4f7f6;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+}
+.tutorial-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+}
+.tutorial-skip {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px;
+}
+.tutorial-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+  padding: 10px 13px;
+  font-weight: 600;
+}
+.tutorial-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--green);
+  font-size: 12px;
+}
+.tutorial-summary span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+@media (max-width: 600px) {
+  .tutorial-card {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+  }
+}
+
+/* Current TenderGraph design tokens: keep the guide controls visible. */
+.tutorial-scrim {
+  background: rgba(23, 41, 67, 0.34);
+}
+.tutorial-card {
+  color: var(--color-ink);
+  border-color: var(--color-line);
+  box-shadow: 0 18px 50px rgba(23, 41, 67, 0.22);
+}
+.tutorial-top {
+  color: var(--color-blue);
+  font-family: var(--font-mono);
+}
+.tutorial-top button,
+.tutorial-skip {
+  color: var(--color-muted);
+}
+.tutorial-progress i {
+  background: var(--color-amber);
+}
+.tutorial-card h2 {
+  font-family: var(--font-display);
+}
+.tutorial-card p {
+  color: var(--color-ink-soft);
+}
+.tutorial-detail {
+  background: var(--color-surface-soft);
+  color: var(--color-muted) !important;
+}
+.tutorial-next {
+  border-color: var(--color-navy);
+  background: var(--color-navy);
+  color: #fff;
+}
+.tutorial-summary {
+  color: var(--color-green);
+}
+.tutorial-scrim {
+  background: transparent;
+}

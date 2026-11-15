@@ -109,7 +109,54 @@ func (s *Server) CompanyIntelligence(w http.ResponseWriter, r *http.Request) {
 	JSON(w, 200, map[string]any{"data": report})
 }
 func (s *Server) ReviewCandidates(w http.ResponseWriter, r *http.Request) {
-	items, err := s.Review.ListCandidates(r.Context(), intel.CandidateFilter{RelationshipType: qp(r, "type", ""), Status: qp(r, "status", ""), Method: qp(r, "method", ""), Limit: qpInt(r, "limit", 25, 100), Offset: qpOff(r)})
+	filter := intel.CandidateFilter{RelationshipType: qp(r, "type", ""), Status: qp(r, "status", ""), Method: qp(r, "method", ""), Limit: qpInt(r, "limit", 25, 100), Offset: qpOff(r)}
+	if qp(r, "ranked", "") == "1" {
+		// Ranked queue: ordered by the active ranker (baseline while no
+		// learned model is promoted). Baseline scores are always attached.
+		items, err := s.Ranking.RankedQueue(r.Context(), filter)
+		if err != nil {
+			sendWorkspaceErr(w, err)
+			return
+		}
+		JSON(w, 200, map[string]any{"data": items, "limit": filter.Limit, "offset": filter.Offset})
+		return
+	}
+	items, err := s.Review.ListCandidates(r.Context(), filter)
+	if err != nil {
+		sendWorkspaceErr(w, err)
+		return
+	}
+	JSON(w, 200, map[string]any{"data": items, "limit": qpInt(r, "limit", 25, 100), "offset": qpOff(r)})
+}
+
+// NotableBidders returns observed participant records with the widest
+// distinct co-bidder networks. These are investigation entry points, not risk
+// or wrongdoing rankings.
+func (s *Server) NotableBidders(w http.ResponseWriter, r *http.Request) {
+	limit := qpInt(r, "limit", 25, 100)
+	rows, err := s.Intel.Rankings(r.Context(), "co-bidding", limit)
+	if err != nil {
+		sendWorkspaceErr(w, err)
+		return
+	}
+	JSON(w, 200, map[string]any{"data": rows, "limit": limit, "calculation": "distinct observed participant keys ranked by distinct co-bidders; this is an exploration index, not a risk score"})
+}
+
+// ReviewRankingStatus exposes the continual-learning system state: active
+// ranker, label counts, exclusions, promotion state and current metrics.
+func (s *Server) ReviewRankingStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := s.Ranking.Status(r.Context())
+	if err != nil {
+		sendWorkspaceErr(w, err)
+		return
+	}
+	JSON(w, 200, map[string]any{"data": status})
+}
+
+// ReviewRankingQueue is the ranked review queue (equivalent to
+// ReviewCandidates?ranked=1) kept as an explicit route for clarity.
+func (s *Server) ReviewRankingQueue(w http.ResponseWriter, r *http.Request) {
+	items, err := s.Ranking.RankedQueue(r.Context(), intel.CandidateFilter{RelationshipType: qp(r, "type", ""), Status: qp(r, "status", ""), Method: qp(r, "method", ""), Limit: qpInt(r, "limit", 25, 100), Offset: qpOff(r)})
 	if err != nil {
 		sendWorkspaceErr(w, err)
 		return

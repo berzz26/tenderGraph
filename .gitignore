@@ -4,3 +4,6 @@ api/.env
 api/vyuha-api
 *.log
 .agents
+/docs
+*.png
+*.jpg

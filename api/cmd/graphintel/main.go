@@ -161,6 +161,51 @@ func main() {
 		default:
 			log.Fatalf("unknown projection operation %q; use status|list|apply|reconcile", args[0])
 		}
+	case "ranking":
+		ranking := intel.RankingStore{Pool: pool}
+		if len(args) == 0 {
+			usage()
+			os.Exit(2)
+		}
+		switch args[0] {
+		case "status":
+			result, err = ranking.Status(ctx)
+		case "refresh":
+			scored, err2 := ranking.ScoreBaseline(ctx)
+			if err2 != nil {
+				log.Fatal(err2)
+			}
+			modelVersion, learnedScored, err2 := ranking.ScoreLearned(ctx)
+			if err2 != nil {
+				log.Fatal(err2)
+			}
+			result = map[string]any{"baseline_scored": scored, "learned_model_version": modelVersion, "learned_scored": learnedScored}
+		case "train":
+			model, decision, err2 := ranking.TrainAndEvaluate(ctx, true)
+			if err2 != nil {
+				log.Fatal(err2)
+			}
+			result = map[string]any{"model": model, "promotion_decision": decision}
+		case "promote":
+			requireArgs(args, 2)
+			err = ranking.PromoteModel(ctx, args[1])
+			if err == nil {
+				result = map[string]any{"promoted": args[1]}
+			}
+		case "rollback":
+			err = ranking.Rollback(ctx, *reason)
+			if err == nil {
+				result = map[string]any{"rolled_back": true, "reason": *reason}
+			}
+		case "queue":
+			queueStatus := *status
+			if queueStatus == "" {
+				queueStatus = "PENDING"
+			}
+			result, err = ranking.RankedQueue(ctx, intel.CandidateFilter{RelationshipType: *relationshipType, Status: queueStatus, Method: *method, Limit: *limit, Offset: *offset})
+		default:
+			log.Fatalf("unknown ranking operation %q; use status|refresh|train|promote|rollback|queue", args[0])
+		}
 	default:
 		usage()
 		os.Exit(2)
@@ -185,7 +230,7 @@ func requireArgs(args []string, n int) {
 	}
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections|refresh-candidates|review-queue|candidate|decision|history|projection [args]")
+	fmt.Fprintln(os.Stderr, "usage: graphintel bidder|co-bidders|pair|network|tender|rankings|organization|company|exposure|announcements|link-candidates|award|degree|paths|connections|refresh-candidates|review-queue|candidate|decision|history|projection|ranking [args]")
 }
 
 func statusOrDefault(status, fallback string) string {

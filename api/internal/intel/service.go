@@ -99,6 +99,7 @@ type PairAnalysis struct {
 }
 
 type RankingRow struct {
+	BidID                 int64  `json:"bid_id"`
 	ObservedKey           string `json:"observed_participant_key"`
 	ExampleName           string `json:"example_name"`
 	BidRecords            int    `json:"bid_records"`
@@ -368,11 +369,11 @@ func (s Service) Rankings(ctx context.Context, by string, limit int) ([]RankingR
 	var q string
 	switch by {
 	case "participation":
-		q = `SELECT p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),0 FROM tender_participants p JOIN tenders t ON t.id=p.tender_id WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized ORDER BY COUNT(DISTINCT p.tender_id) DESC,p.participant_normalized LIMIT $1`
+		q = `SELECT MIN(p.id),p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),0 FROM tender_participants p JOIN tenders t ON t.id=p.tender_id WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized ORDER BY COUNT(DISTINCT p.tender_id) DESC,p.participant_normalized LIMIT $1`
 	case "organizations":
-		q = `SELECT p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),0 FROM tender_participants p JOIN tenders t ON t.id=p.tender_id WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized ORDER BY COUNT(DISTINCT t.organization) DESC,p.participant_normalized LIMIT $1`
+		q = `SELECT MIN(p.id),p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),0 FROM tender_participants p JOIN tenders t ON t.id=p.tender_id WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized ORDER BY COUNT(DISTINCT t.organization) DESC,p.participant_normalized LIMIT $1`
 	case "co-bidding":
-		q = `WITH bidders AS (SELECT DISTINCT tender_id,participant_normalized FROM tender_participants WHERE COALESCE(participant_normalized,'')<>''), pairs AS (SELECT a.participant_normalized a,b.participant_normalized b FROM bidders a JOIN bidders b ON b.tender_id=a.tender_id AND a.participant_normalized<b.participant_normalized GROUP BY a.participant_normalized,b.participant_normalized), ranked AS (SELECT a AS observed_key,COUNT(*) AS distinct_cobidders FROM pairs GROUP BY a UNION ALL SELECT b AS observed_key,COUNT(*) AS distinct_cobidders FROM pairs GROUP BY b), totals AS (SELECT observed_key,SUM(distinct_cobidders)::bigint AS distinct_cobidders FROM ranked GROUP BY observed_key) SELECT p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),COALESCE(totals.distinct_cobidders,0) FROM tender_participants p JOIN tenders t ON t.id=p.tender_id LEFT JOIN totals ON totals.observed_key=p.participant_normalized WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized,totals.distinct_cobidders ORDER BY COALESCE(totals.distinct_cobidders,0) DESC,p.participant_normalized LIMIT $1`
+		q = `WITH bidders AS (SELECT DISTINCT tender_id,participant_normalized FROM tender_participants WHERE COALESCE(participant_normalized,'')<>''), pairs AS (SELECT a.participant_normalized a,b.participant_normalized b FROM bidders a JOIN bidders b ON b.tender_id=a.tender_id AND a.participant_normalized<b.participant_normalized GROUP BY a.participant_normalized,b.participant_normalized), ranked AS (SELECT a AS observed_key,COUNT(*) AS distinct_cobidders FROM pairs GROUP BY a UNION ALL SELECT b AS observed_key,COUNT(*) AS distinct_cobidders FROM pairs GROUP BY b), totals AS (SELECT observed_key,SUM(distinct_cobidders)::bigint AS distinct_cobidders FROM ranked GROUP BY observed_key) SELECT MIN(p.id),p.participant_normalized,MAX(p.participant_name),COUNT(*),COUNT(DISTINCT p.tender_id),COUNT(DISTINCT t.organization),COALESCE(totals.distinct_cobidders,0) FROM tender_participants p JOIN tenders t ON t.id=p.tender_id LEFT JOIN totals ON totals.observed_key=p.participant_normalized WHERE COALESCE(p.participant_normalized,'')<>'' GROUP BY p.participant_normalized,totals.distinct_cobidders ORDER BY COALESCE(totals.distinct_cobidders,0) DESC,p.participant_normalized LIMIT $1`
 	default:
 		return nil, fmt.Errorf("unknown ranking %q (use participation, organizations, or co-bidding)", by)
 	}
@@ -384,7 +385,7 @@ func (s Service) Rankings(ctx context.Context, by string, limit int) ([]RankingR
 	var out []RankingRow
 	for rows.Next() {
 		var r RankingRow
-		if err := rows.Scan(&r.ObservedKey, &r.ExampleName, &r.BidRecords, &r.DistinctTenders, &r.DistinctOrganizations, &r.DistinctCoBidders); err != nil {
+		if err := rows.Scan(&r.BidID, &r.ObservedKey, &r.ExampleName, &r.BidRecords, &r.DistinctTenders, &r.DistinctOrganizations, &r.DistinctCoBidders); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -1,0 +1,1888 @@
+{
+ "start": "2026-11-15T05:29:31.722Z",
+ "round": 1,
+ "idle": 0,
+ "errors": 0,
+ "status": "fail",
+ "history": [
+  {
+   "at": "2026-11-15T05:31:46.165Z",
+   "mode": "manual",
+   "status": "fail",
+   "fails": 53,
+   "round": 1,
+   "reused": false,
+   "stopHookActive": false
+  }
+ ],
+ "max": 3,
+ "marker": {
+  "page": null,
+  "url": "http://localhost:5174/",
+  "root": null,
+  "kind": "software",
+  "category": "procurement investigation workspace",
+  "primary": "Find a company or bidder",
+  "rounds": 3,
+  "start": "2026-11-15T05:29:31.722Z",
+  "by": "gate.mjs --start"
+ },
+ "manual": true,
+ "roundKey": "bb34a3da8c23b407:da39a3ee",
+ "roundFree": false,
+ "idleFree": false,
+ "blockKey": null,
+ "fp": "bb34a3da8c23b407",
+ "page": "http://localhost:5174/",
+ "found": {
+  "fails": [
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"this\"",
+    "msg": "a shader uses \"this\" as a name (line 21: var cy = this.cy;): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"this\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"filter\"",
+    "msg": "a shader uses \"filter\" as a name (line 177: eles.interactive = eles.filter(function(ele) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"filter\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"active\"",
+    "msg": "a shader uses \"active\" as a name (line 778: if (down && down.pannable() && down.active()) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"active\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"__________cytoscape_stylesheet\"",
+    "msg": "a shader uses \"__________cytoscape_stylesheet\" as a name (line 2458: var stylesheetId = \"__________cytoscape_stylesheet\";): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"__________cytoscape_stylesheet\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"__________cytoscape_container\"",
+    "msg": "a shader uses \"__________cytoscape_container\" as a name (line 2459: var className = \"__________cytoscape_container\";): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"__________cytoscape_container\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"static\"",
+    "msg": "a shader uses \"static\" as a name (line 2472: if (position3 === \"static\") {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"static\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"smooth\"",
+    "msg": "a shader uses \"smooth\" as a name (line 3791: var x2, y2, sx, sy, smooth;): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"smooth\""
+    ]
+   },
+   {
+    "check": "shader-lint",
+    "where": "deps/cytoscape.js \"switch\"",
+    "msg": "a shader uses \"switch\" as a name (line 4073: switch (type) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+    "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "shader-lint"
+    ],
+    "wheres": [
+     "deps/cytoscape.js \"switch\""
+    ]
+   },
+   {
+    "check": "hero-fill",
+    "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+    "msg": "the next section shows on the first screen: it starts at 452px on a 900px screen (the hero ends at 420px)",
+    "fix": "let the hero fill the first screen alone (min-height: 100svh, less above it): nothing of the next section on load",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "hero-fill"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+    ]
+   },
+   {
+    "check": "flush",
+    "where": "div.content-wrap > div.section-head > div > h2 \"Read the graph carefully\"",
+    "msg": "its last line sits -3px above the rule on top of div.principles",
+    "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "flush"
+    ],
+    "wheres": [
+     "div.content-wrap > div.section-head > div > h2 \"Read the graph carefully\""
+    ]
+   },
+   {
+    "check": "flush",
+    "where": "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\"",
+    "msg": "its last line sits 11px above the rule on top of section.availability",
+    "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "flush"
+    ],
+    "wheres": [
+     "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\""
+    ]
+   },
+   {
+    "check": "card-visual",
+    "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+    "msg": "3 cards hold only text: no picture, icon, UI fragment or effect in any of them",
+    "fix": "give the cards a visual: an inset panel with a UI fragment, a photograph or real icons",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "card-visual"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+    ]
+   },
+   {
+    "check": "card-visual",
+    "where": "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rows 22,865 Award evidence 2\"",
+    "msg": "4 cards hold only text: no picture, icon, UI fragment or effect in any of them",
+    "fix": "give the cards a visual: an inset panel with a UI fragment, a photograph or real icons",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "card-visual"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rows 22,865 Award evidence 2\""
+    ]
+   },
+   {
+    "check": "cta",
+    "where": "div.app-shell > main.main > div.content-wrap > div.hero",
+    "msg": "the hero has no button (the nav's does not count)",
+    "fix": "add the action: a button in the hero, one on every priced item, one in the closing section",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "cta"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.hero"
+    ]
+   },
+   {
+    "check": "cta",
+    "where": "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\"",
+    "msg": "the last section before the footer ends with no button",
+    "fix": "add the action: a button in the hero, one on every priced item, one in the closing section",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "cta"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\""
+    ]
+   },
+   {
+    "check": "copy-headline",
+    "where": "div.content-wrap > div.hero > div:nth-of-type(1) > h1 \"Follow the evidence.\"",
+    "msg": "\"Follow the evidence.\" does not name what is sold (procurement investigation workspace, procurement, investigation, workspace, from flags); only the line under it does",
+    "fix": "put the category noun in the h1 (and who it is for, or where), in 2 to 8 words",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "copy-headline"
+    ],
+    "wheres": [
+     "div.content-wrap > div.hero > div:nth-of-type(1) > h1 \"Follow the evidence.\""
+    ]
+   },
+   {
+    "check": "heading-scale",
+    "where": "main.main > div.content-wrap > section.availability > h3 \"Available to investigate\"",
+    "msg": "an h3 at 28px, as large as the smallest h2 (28px) or larger",
+    "fix": "size headings by level: the h1 largest, one size per level, each level below the one above",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "heading-scale"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > section.availability > h3 \"Available to investigate\""
+    ]
+   },
+   {
+    "check": "text-contrast",
+    "where": "main.main > header.topbar > form.global-search > kbd \"⌘ K\"",
+    "msg": "a caption, label or muted line in #71808b on #ffffff reads 4.07:1 (needs 4.5:1); 8 like it, like \"Inspect repeat co-bidd\", \"Examine system candida\", \"Participant rows\"",
+    "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-contrast"
+    ],
+    "wheres": [
+     "main.main > header.topbar > form.global-search > kbd \"⌘ K\""
+    ]
+   },
+   {
+    "check": "text-contrast",
+    "where": "div.app-shell > main.main > header.topbar > div.top-actions \"Development evidence environment\"",
+    "msg": "a caption, label or muted line in #71808b on #f4f6f4 reads 3.75:1 (needs 4.5:1); 3 like it, like \"Source facts are not c\", \"A bounded workspace fo\"",
+    "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-contrast"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > header.topbar > div.top-actions \"Development evidence environment\""
+    ]
+   },
+   {
+    "check": "text-contrast",
+    "where": "div.content-wrap > div.principles > div:nth-of-type(1) > em \"01\"",
+    "msg": "a caption, label or muted line in #a96a26 on #f4f6f4 reads 4.05:1 (needs 4.5:1); 3 like it, like \"02\", \"03\"",
+    "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-contrast"
+    ],
+    "wheres": [
+     "div.content-wrap > div.principles > div:nth-of-type(1) > em \"01\""
+    ]
+   },
+   {
+    "check": "text-contrast",
+    "where": "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\"",
+    "msg": "body text in #71808b on #f4f6f4 reads 3.75:1 (needs 7:1); 3 like it, like \"Co-bidding counts, ove\", \"Corporate associations\"",
+    "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-contrast"
+    ],
+    "wheres": [
+     "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a.active \"Workspace\"",
+    "msg": "\"Workspace\" goes to #!/workspace, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a.active \"Workspace\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(2) \"Network\"",
+    "msg": "\"Network\" goes to #!/network, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a:nth-of-type(2) \"Network\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(3) \"Compare\"",
+    "msg": "\"Compare\" goes to #!/compare, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a:nth-of-type(3) \"Compare\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(4) \"Companies\"",
+    "msg": "\"Companies\" goes to #!/company, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a:nth-of-type(4) \"Companies\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(5) \"Tenders\"",
+    "msg": "\"Tenders\" goes to #!/tender, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a:nth-of-type(5) \"Tenders\""
+    ]
+   },
+   {
+    "check": "links",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(6) \"Review\"",
+    "msg": "\"Review\" goes to #!/review, which is not on this page",
+    "fix": "point every link at a real section, page or file",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "links"
+    ],
+    "wheres": [
+     "div.app-shell > aside.rail > nav > a:nth-of-type(6) \"Review\""
+    ]
+   },
+   {
+    "check": "field-label",
+    "where": "main.main > header.topbar > form.global-search > input",
+    "msg": "a input[type=text] without a label you can see: only a placeholder (\"Search companies, bidders, ten\") names it",
+    "fix": "put a <label for> with the field's name above it (references/system.md, Forms); a placeholder is no label",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "field-label"
+    ],
+    "wheres": [
+     "main.main > header.topbar > form.global-search > input"
+    ]
+   },
+   {
+    "check": "focus-visible",
+    "where": "main.main > header.topbar > form.global-search > input \"Search records\"",
+    "msg": "Tab stop 8, input \"Search records\": it shows no change when focused",
+    "fix": "keep the kit's ring (system.css :focus-visible, 2px in --action, there at once); a control that hides itself shows on focus",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "focus-visible"
+    ],
+    "wheres": [
+     "main.main > header.topbar > form.global-search > input \"Search records\""
+    ]
+   },
+   {
+    "check": "hero-enter",
+    "where": "div.app-shell > main.main > div.content-wrap > div.hero",
+    "msg": "the hero does not enter on load: no data-enter on the hero and no head line setting html.m-enter (motion.md, The hero's entrance)",
+    "fix": "put data-enter on the hero <section> and keep the head line from starter.html that sets html.m-enter",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "hero-enter"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.hero"
+    ]
+   },
+   {
+    "check": "moment-none",
+    "where": "(the page)",
+    "msg": "a software page (--type) deals no moment: every kind carries one, two on a long page (moments.md)",
+    "fix": "deal one (moments.mjs pick --page software) and mount it in its own section",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "moment-none"
+    ],
+    "wheres": [
+     "(the page)"
+    ]
+   },
+   {
+    "check": "hero-screen",
+    "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+    "msg": "the hero ends at 155px on a 900px screen, 745px above the fold: it ends at the fold, 1px either way (SR-1)",
+    "fix": "make the hero exactly one screen (height: 100svh, its content fitted inside), never taller or shorter",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "hero-screen"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+    ]
+   },
+   {
+    "check": "hero-screen",
+    "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+    "msg": "745px of the next section shows on the first screen (from 155px on a 900px screen): nothing below the hero shows at load (SR-1)",
+    "fix": "end the hero at the fold so nothing of the next section shows at load (hero height: 100svh)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "hero-screen"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+    ]
+   },
+   {
+    "check": "section-height",
+    "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+    "msg": "the section is 1145px tall (1.3 screens), 245px over one screen (900px): every section after the hero is one screen or two, 2px either way (SR-2)",
+    "fix": "set the section to one screen or two (height: calc(var(--h,1) * 100vh), --h 1 or 2) and cut or split its content to fit",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "section-height"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+     "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+    ]
+   },
+   {
+    "check": "section-air",
+    "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\"",
+    "msg": "a top border across 100% of the container, between the section's content: sections and their parts are told apart by air and ground, not lines (SR-3)",
+    "fix": "take the rule out: sections and their parts are parted by their ground and the air between them",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "section-air"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\""
+    ]
+   },
+   {
+    "check": "section-air",
+    "where": "div.app-shell > main.main > div.content-wrap > section.availability \"LIVE DATA SURFACEAvailable to investigat\"",
+    "msg": "a top border across 100% of the container, between the section's content: sections and their parts are told apart by air and ground, not lines (SR-3)",
+    "fix": "take the rule out: sections and their parts are parted by their ground and the air between them",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "section-air"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > section.availability \"LIVE DATA SURFACEAvailable to investigat\""
+    ]
+   },
+   {
+    "check": "one-section",
+    "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+    "msg": "the screen at scroll 0px (stride 0) shows 73px of section 1 and the content of 2 sections, over 24px each beside section 2: a screen shows one section (another may peek 8px, 24px WARN) (SR-4)",
+    "fix": "make each section exactly one screen or two, so a screen shows one section and no neighbour peeks",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "one-section"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+     "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+    ]
+   },
+   {
+    "check": "one-section",
+    "where": "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rowsLoading…Award evidenceLo\"",
+    "msg": "a band: a box 100% of the section wide on a ground of its own that holds only text: the section's own ground is the band (SR-4)",
+    "fix": "put every block of <main> in a <section>, and give a band its own section instead of a ground inside one",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "one-section"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rowsLoading…Award evidenceLo\""
+    ]
+   },
+   {
+    "check": "container-edges",
+    "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+    "msg": "the content of section 1 runs 48px from the left and 48px from the right (read from its outermost blocks: no .wrap): the margin is 64-120px at 1440px (one container, equal margins, 2px either way) (SR-6)",
+    "fix": "use one container on every section and the nav (.wrap): one margin left and right, 64-120px on a desktop, 16-24px on a phone",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "container-edges"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+    ]
+   },
+   {
+    "check": "container-edges",
+    "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+    "msg": "the content of section 2 runs 48px from the left and 48px from the right (read from its outermost blocks: no .wrap): the margin is 64-120px at 1440px (one container, equal margins, 2px either way) (SR-6)",
+    "fix": "use one container on every section and the nav (.wrap): one margin left and right, 64-120px on a desktop, 16-24px on a phone",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "container-edges"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+    ]
+   },
+   {
+    "check": "container-edges",
+    "where": "div#root \"TENDERGRAPHInvestigateWorkspaceNetworkCo\"",
+    "msg": "a <div> at the top of the page, outside header.nav, main, footer.closing and nav.actionbar (SR-6)",
+    "fix": "build the page as header.nav, a main of sections (each one in-flow .wrap plus background layers) and footer.closing",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "container-edges"
+    ],
+    "wheres": [
+     "div#root \"TENDERGRAPHInvestigateWorkspaceNetworkCo\""
+    ]
+   },
+   {
+    "check": "container-edges",
+    "where": "div.app-shell > main.main > div.content-wrap > div.hero \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+    "msg": "a box over half the container wide runs 48-1108px, not on the container's lines at 48-1392px (SR-6)",
+    "fix": "run the picture or box from the container's left line to its right line, or put it in a row or a split",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "container-edges"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.hero \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+    ]
+   },
+   {
+    "check": "row-lines",
+    "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\"",
+    "msg": "a row of 3 items: its last item ends at 1368px, the container's right line at 1392px (2px either way) (SR-7)",
+    "fix": "start the row's first item on the container's left line and end its last on the right line, every item one height",
+    "widths": [
+     1440
+    ],
+    "from": "consistency",
+    "ids": [
+     "row-lines"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\""
+    ]
+   },
+   {
+    "check": "flush",
+    "where": "main.main > div.content-wrap > div.section-head > span.quiet \"A bounded workspace for evidence-backed \"",
+    "msg": "its last line sits 2px above the rule on top of div.principles",
+    "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "flush"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > div.section-head > span.quiet \"A bounded workspace for evidence-backed \""
+    ]
+   },
+   {
+    "check": "nav",
+    "where": "div#root > div.app-shell > aside.rail > nav",
+    "msg": "the nav has no bar, and its pieces sit past the content's edges (18-431px against 18-372px)",
+    "fix": "make the nav one bar from the content's left edge to its right edge, with every link and action inside it",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "nav"
+    ],
+    "wheres": [
+     "div#root > div.app-shell > aside.rail > nav"
+    ]
+   },
+   {
+    "check": "no-visual",
+    "where": "div.app-shell > main.main > div.content-wrap > div.hero \"Follow the evidence.\"",
+    "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+    "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "no-visual"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.hero \"Follow the evidence.\""
+    ]
+   },
+   {
+    "check": "no-visual",
+    "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+    "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+    "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "no-visual"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+    ]
+   },
+   {
+    "check": "no-visual",
+    "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01 Observed Participant records, tender \"",
+    "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+    "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "no-visual"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.principles \"01 Observed Participant records, tender \""
+    ]
+   },
+   {
+    "check": "text-only",
+    "where": "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\"",
+    "msg": "the closing section is only text: no picture, icon, mock or effect in it",
+    "fix": "give the section a visual: a photograph that fits, the real icons, or a UI fragment on a ground",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-only"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\""
+    ]
+   },
+   {
+    "check": "off-grid",
+    "where": "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\"",
+    "msg": "left edge at 36px, 18px off the page margin at 18px (23 elements, like button.entry-card.primary)",
+    "fix": "move it onto the page margin, or the column edge its section uses",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "off-grid"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\""
+    ]
+   },
+   {
+    "check": "text-contrast",
+    "where": "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\"",
+    "msg": "a caption, label or muted line in #71808b on #f4f6f4 reads 3.75:1 (needs 4.5:1); 2 like it, like \"A bounded workspace fo\"",
+    "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "text-contrast"
+    ],
+    "wheres": [
+     "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\""
+    ]
+   },
+   {
+    "check": "section-gaps",
+    "where": "div.app-shell > main.main > div.content-wrap > div.principles / div.app-shell > main.main > div.content-wrap > section.availability",
+    "msg": "122px between these sections, +100% against the median 61px",
+    "fix": "use one gap between sections (all within 25% of each other)",
+    "widths": [
+     390
+    ],
+    "from": "consistency",
+    "ids": [
+     "section-gaps"
+    ],
+    "wheres": [
+     "div.app-shell > main.main > div.content-wrap > div.principles / div.app-shell > main.main > div.content-wrap > section.availability"
+    ]
+   },
+   {
+    "check": "container",
+    "where": "page",
+    "msg": "no .wrap",
+    "fix": "put the content in one .wrap",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "layout",
+    "ids": [
+     "container"
+    ],
+    "wheres": [
+     "page"
+    ]
+   }
+  ],
+  "warns": [
+   {
+    "check": "copy-actions",
+    "where": "(the page)",
+    "msg": "the main action \"Find a company or bidder\" does not read word for word the same in the nav or hero and the closing section",
+    "fix": "few actions, one wording: at most 2 in the hero, the main action word for word in nav, hero and close",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "body-size",
+    "where": "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\"",
+    "msg": "3 of 4 paragraphs of running text are set under 16px (14px)",
+    "fix": "set running text at 16px or more",
+    "widths": [
+     1440,
+     390
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "section-gaps",
+    "where": "div.app-shell > main.main > div.content-wrap > div.section-head / div.app-shell > main.main > div.content-wrap > div.principles",
+    "msg": "46px between these sections, -39% against the median 76px",
+    "fix": "use one gap between sections (all within 25% of each other)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "section-gaps",
+    "where": "div.app-shell > main.main > div.content-wrap > div.principles / div.app-shell > main.main > div.content-wrap > section.availability",
+    "msg": "107px between these sections, +41% against the median 76px",
+    "fix": "use one gap between sections (all within 25% of each other)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "skip-link",
+    "where": "div#root > div.app-shell > aside.rail > button.wordmark \"TENDERGRAPH\"",
+    "msg": "the first Tab stop is \"TENDERGRAPH\", not a skip link: a keyboard user tabs through the whole nav on every visit",
+    "fix": "add the starter's skip link as the header's first child: <a class=\"skip-link\" href=\"#top\">Skip to content</a>",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "share-meta",
+    "where": "head",
+    "msg": "the head lacks og:title, og:description, og:image, twitter:card, an icon, theme-color: a shared link shows no picture or title of its own",
+    "fix": "copy the head block of starter.html: og tags, twitter:card, the icon and theme-color (references/system.md, Head)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "form-fields",
+    "where": "div.app-shell > main.main > header.topbar > form.global-search",
+    "msg": "the form has no status line (role=\"status\"): sending, sent and errors are never read out",
+    "fix": "give each field its type, autocomplete and inputmode, never block paste or disable the button before a submit, and add the status line (references/system.md, Forms)",
+    "widths": [
+     1440
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "tap-size",
+    "where": "div#root > div.app-shell > aside.rail > button.wordmark \"TENDER GRAPH\"",
+    "msg": "a 155x28px tap target: under the 44px a phone needs",
+    "fix": "make every link and control outside running text 44px tall on a phone: display: inline-flex; align-items: center; min-height: 44px (a footer list then needs no gap), a 44px small button, or a transparent ::before laid past the box",
+    "widths": [
+     390,
+     320
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "tap-size",
+    "where": "div.app-shell > aside.rail > nav > a.active \"Workspace\"",
+    "msg": "a 78x34px tap target: under the 44px a phone needs",
+    "fix": "make every link and control outside running text 44px tall on a phone: display: inline-flex; align-items: center; min-height: 44px (a footer list then needs no gap), a 44px small button, or a transparent ::before laid past the box",
+    "widths": [
+     390,
+     320
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "tap-size",
+    "where": "div.app-shell > aside.rail > nav > a:nth-of-type(2) \"Network\"",
+    "msg": "a 58x34px tap target (and 4 more like it on this screen): under the 44px a phone needs",
+    "fix": "make every link and control outside running text 44px tall on a phone: display: inline-flex; align-items: center; min-height: 44px (a footer list then needs no gap), a 44px small button, or a transparent ::before laid past the box",
+    "widths": [
+     390,
+     320
+    ],
+    "from": "consistency"
+   },
+   {
+    "check": "tap-size",
+    "where": "main.main > header.topbar > form.global-search > input",
+    "msg": "a 255x42px tap target: under the 44px a phone needs",
+    "fix": "make every link and control outside running text 44px tall on a phone: display: inline-flex; align-items: center; min-height: 44px (a footer list then needs no gap), a 44px small button, or a transparent ::before laid past the box",
+    "widths": [
+     390,
+     320
+    ],
+    "from": "consistency"
+   }
+  ],
+  "crashed": [],
+  "seconds": {
+   "consistency": 89,
+   "layout": 15
+  }
+ },
+ "open": [
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"this\"",
+   "msg": "a shader uses \"this\" as a name (line 21: var cy = this.cy;): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"this\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"filter\"",
+   "msg": "a shader uses \"filter\" as a name (line 177: eles.interactive = eles.filter(function(ele) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"filter\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"active\"",
+   "msg": "a shader uses \"active\" as a name (line 778: if (down && down.pannable() && down.active()) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"active\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"__________cytoscape_stylesheet\"",
+   "msg": "a shader uses \"__________cytoscape_stylesheet\" as a name (line 2458: var stylesheetId = \"__________cytoscape_stylesheet\";): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"__________cytoscape_stylesheet\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"__________cytoscape_container\"",
+   "msg": "a shader uses \"__________cytoscape_container\" as a name (line 2459: var className = \"__________cytoscape_container\";): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"__________cytoscape_container\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"static\"",
+   "msg": "a shader uses \"static\" as a name (line 2472: if (position3 === \"static\") {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"static\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"smooth\"",
+   "msg": "a shader uses \"smooth\" as a name (line 3791: var x2, y2, sx, sy, smooth;): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"smooth\""
+   ]
+  },
+  {
+   "check": "shader-lint",
+   "where": "deps/cytoscape.js \"switch\"",
+   "msg": "a shader uses \"switch\" as a name (line 4073: switch (type) {): GLSL ES reserves it, so a strict GPU rejects the whole shader and the picture stays empty",
+   "fix": "rename it (flat, smooth, centroid, sample, patch, input, output, filter and the rest are GLSL ES reserved words)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "shader-lint"
+   ],
+   "wheres": [
+    "deps/cytoscape.js \"switch\""
+   ]
+  },
+  {
+   "check": "hero-fill",
+   "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+   "msg": "the next section shows on the first screen: it starts at 452px on a 900px screen (the hero ends at 420px)",
+   "fix": "let the hero fill the first screen alone (min-height: 100svh, less above it): nothing of the next section on load",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "hero-fill"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+   ]
+  },
+  {
+   "check": "flush",
+   "where": "div.content-wrap > div.section-head > div > h2 \"Read the graph carefully\"",
+   "msg": "its last line sits -3px above the rule on top of div.principles",
+   "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "flush"
+   ],
+   "wheres": [
+    "div.content-wrap > div.section-head > div > h2 \"Read the graph carefully\""
+   ]
+  },
+  {
+   "check": "flush",
+   "where": "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\"",
+   "msg": "its last line sits 11px above the rule on top of section.availability",
+   "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "flush"
+   ],
+   "wheres": [
+    "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\""
+   ]
+  },
+  {
+   "check": "card-visual",
+   "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+   "msg": "3 cards hold only text: no picture, icon, UI fragment or effect in any of them",
+   "fix": "give the cards a visual: an inset panel with a UI fragment, a photograph or real icons",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "card-visual"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+   ]
+  },
+  {
+   "check": "card-visual",
+   "where": "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rows 22,865 Award evidence 2\"",
+   "msg": "4 cards hold only text: no picture, icon, UI fragment or effect in any of them",
+   "fix": "give the cards a visual: an inset panel with a UI fragment, a photograph or real icons",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "card-visual"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rows 22,865 Award evidence 2\""
+   ]
+  },
+  {
+   "check": "cta",
+   "where": "div.app-shell > main.main > div.content-wrap > div.hero",
+   "msg": "the hero has no button (the nav's does not count)",
+   "fix": "add the action: a button in the hero, one on every priced item, one in the closing section",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "cta"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.hero"
+   ]
+  },
+  {
+   "check": "cta",
+   "where": "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\"",
+   "msg": "the last section before the footer ends with no button",
+   "fix": "add the action: a button in the hero, one on every priced item, one in the closing section",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "cta"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\""
+   ]
+  },
+  {
+   "check": "copy-headline",
+   "where": "div.content-wrap > div.hero > div:nth-of-type(1) > h1 \"Follow the evidence.\"",
+   "msg": "\"Follow the evidence.\" does not name what is sold (procurement investigation workspace, procurement, investigation, workspace, from flags); only the line under it does",
+   "fix": "put the category noun in the h1 (and who it is for, or where), in 2 to 8 words",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "copy-headline"
+   ],
+   "wheres": [
+    "div.content-wrap > div.hero > div:nth-of-type(1) > h1 \"Follow the evidence.\""
+   ]
+  },
+  {
+   "check": "heading-scale",
+   "where": "main.main > div.content-wrap > section.availability > h3 \"Available to investigate\"",
+   "msg": "an h3 at 28px, as large as the smallest h2 (28px) or larger",
+   "fix": "size headings by level: the h1 largest, one size per level, each level below the one above",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "heading-scale"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > section.availability > h3 \"Available to investigate\""
+   ]
+  },
+  {
+   "check": "text-contrast",
+   "where": "main.main > header.topbar > form.global-search > kbd \"⌘ K\"",
+   "msg": "a caption, label or muted line in #71808b on #ffffff reads 4.07:1 (needs 4.5:1); 8 like it, like \"Inspect repeat co-bidd\", \"Examine system candida\", \"Participant rows\"",
+   "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-contrast"
+   ],
+   "wheres": [
+    "main.main > header.topbar > form.global-search > kbd \"⌘ K\""
+   ]
+  },
+  {
+   "check": "text-contrast",
+   "where": "div.app-shell > main.main > header.topbar > div.top-actions \"Development evidence environment\"",
+   "msg": "a caption, label or muted line in #71808b on #f4f6f4 reads 3.75:1 (needs 4.5:1); 3 like it, like \"Source facts are not c\", \"A bounded workspace fo\"",
+   "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-contrast"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > header.topbar > div.top-actions \"Development evidence environment\""
+   ]
+  },
+  {
+   "check": "text-contrast",
+   "where": "div.content-wrap > div.principles > div:nth-of-type(1) > em \"01\"",
+   "msg": "a caption, label or muted line in #a96a26 on #f4f6f4 reads 4.05:1 (needs 4.5:1); 3 like it, like \"02\", \"03\"",
+   "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-contrast"
+   ],
+   "wheres": [
+    "div.content-wrap > div.principles > div:nth-of-type(1) > em \"01\""
+   ]
+  },
+  {
+   "check": "text-contrast",
+   "where": "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\"",
+   "msg": "body text in #71808b on #f4f6f4 reads 3.75:1 (needs 7:1); 3 like it, like \"Co-bidding counts, ove\", \"Corporate associations\"",
+   "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-contrast"
+   ],
+   "wheres": [
+    "div.content-wrap > div.principles > div:nth-of-type(1) > p \"Participant records, tender facts and aw\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a.active \"Workspace\"",
+   "msg": "\"Workspace\" goes to #!/workspace, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a.active \"Workspace\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a:nth-of-type(2) \"Network\"",
+   "msg": "\"Network\" goes to #!/network, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a:nth-of-type(2) \"Network\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a:nth-of-type(3) \"Compare\"",
+   "msg": "\"Compare\" goes to #!/compare, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a:nth-of-type(3) \"Compare\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a:nth-of-type(4) \"Companies\"",
+   "msg": "\"Companies\" goes to #!/company, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a:nth-of-type(4) \"Companies\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a:nth-of-type(5) \"Tenders\"",
+   "msg": "\"Tenders\" goes to #!/tender, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a:nth-of-type(5) \"Tenders\""
+   ]
+  },
+  {
+   "check": "links",
+   "where": "div.app-shell > aside.rail > nav > a:nth-of-type(6) \"Review\"",
+   "msg": "\"Review\" goes to #!/review, which is not on this page",
+   "fix": "point every link at a real section, page or file",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "links"
+   ],
+   "wheres": [
+    "div.app-shell > aside.rail > nav > a:nth-of-type(6) \"Review\""
+   ]
+  },
+  {
+   "check": "field-label",
+   "where": "main.main > header.topbar > form.global-search > input",
+   "msg": "a input[type=text] without a label you can see: only a placeholder (\"Search companies, bidders, ten\") names it",
+   "fix": "put a <label for> with the field's name above it (references/system.md, Forms); a placeholder is no label",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "field-label"
+   ],
+   "wheres": [
+    "main.main > header.topbar > form.global-search > input"
+   ]
+  },
+  {
+   "check": "focus-visible",
+   "where": "main.main > header.topbar > form.global-search > input \"Search records\"",
+   "msg": "Tab stop 8, input \"Search records\": it shows no change when focused",
+   "fix": "keep the kit's ring (system.css :focus-visible, 2px in --action, there at once); a control that hides itself shows on focus",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "focus-visible"
+   ],
+   "wheres": [
+    "main.main > header.topbar > form.global-search > input \"Search records\""
+   ]
+  },
+  {
+   "check": "hero-enter",
+   "where": "div.app-shell > main.main > div.content-wrap > div.hero",
+   "msg": "the hero does not enter on load: no data-enter on the hero and no head line setting html.m-enter (motion.md, The hero's entrance)",
+   "fix": "put data-enter on the hero <section> and keep the head line from starter.html that sets html.m-enter",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "hero-enter"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.hero"
+   ]
+  },
+  {
+   "check": "moment-none",
+   "where": "(the page)",
+   "msg": "a software page (--type) deals no moment: every kind carries one, two on a long page (moments.md)",
+   "fix": "deal one (moments.mjs pick --page software) and mount it in its own section",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "moment-none"
+   ],
+   "wheres": [
+    "(the page)"
+   ]
+  },
+  {
+   "check": "hero-screen",
+   "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+   "msg": "the hero ends at 155px on a 900px screen, 745px above the fold: it ends at the fold, 1px either way (SR-1)",
+   "fix": "make the hero exactly one screen (height: 100svh, its content fitted inside), never taller or shorter",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "hero-screen"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+   ]
+  },
+  {
+   "check": "hero-screen",
+   "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+   "msg": "745px of the next section shows on the first screen (from 155px on a 900px screen): nothing below the hero shows at load (SR-1)",
+   "fix": "end the hero at the fold so nothing of the next section shows at load (hero height: 100svh)",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "hero-screen"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+   ]
+  },
+  {
+   "check": "section-height",
+   "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+   "msg": "the section is 1145px tall (1.3 screens), 245px over one screen (900px): every section after the hero is one screen or two, 2px either way (SR-2)",
+   "fix": "set the section to one screen or two (height: calc(var(--h,1) * 100vh), --h 1 or 2) and cut or split its content to fit",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "section-height"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+    "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+   ]
+  },
+  {
+   "check": "section-air",
+   "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\"",
+   "msg": "a top border across 100% of the container, between the section's content: sections and their parts are told apart by air and ground, not lines (SR-3)",
+   "fix": "take the rule out: sections and their parts are parted by their ground and the air between them",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "section-air"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\""
+   ]
+  },
+  {
+   "check": "section-air",
+   "where": "div.app-shell > main.main > div.content-wrap > section.availability \"LIVE DATA SURFACEAvailable to investigat\"",
+   "msg": "a top border across 100% of the container, between the section's content: sections and their parts are told apart by air and ground, not lines (SR-3)",
+   "fix": "take the rule out: sections and their parts are parted by their ground and the air between them",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "section-air"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > section.availability \"LIVE DATA SURFACEAvailable to investigat\""
+   ]
+  },
+  {
+   "check": "one-section",
+   "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+   "msg": "the screen at scroll 0px (stride 0) shows 73px of section 1 and the content of 2 sections, over 24px each beside section 2: a screen shows one section (another may peek 8px, 24px WARN) (SR-4)",
+   "fix": "make each section exactly one screen or two, so a screen shows one section and no neighbour peeks",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "one-section"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+    "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+   ]
+  },
+  {
+   "check": "one-section",
+   "where": "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rowsLoading…Award evidenceLo\"",
+   "msg": "a band: a box 100% of the section wide on a ground of its own that holds only text: the section's own ground is the band (SR-4)",
+   "fix": "put every block of <main> in a <section>, and give a band its own section instead of a ground inside one",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "one-section"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > section.availability > div.availability-grid \"Participant rowsLoading…Award evidenceLo\""
+   ]
+  },
+  {
+   "check": "container-edges",
+   "where": "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\"",
+   "msg": "the content of section 1 runs 48px from the left and 48px from the right (read from its outermost blocks: no .wrap): the margin is 64-120px at 1440px (one container, equal margins, 2px either way) (SR-6)",
+   "fix": "use one container on every section and the nav (.wrap): one margin left and right, 64-120px on a desktop, 16-24px on a phone",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "container-edges"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > header.topbar \"⌘ KDevelopment evidence environment\""
+   ]
+  },
+  {
+   "check": "container-edges",
+   "where": "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+   "msg": "the content of section 2 runs 48px from the left and 48px from the right (read from its outermost blocks: no .wrap): the margin is 64-120px at 1440px (one container, equal margins, 2px either way) (SR-6)",
+   "fix": "use one container on every section and the nav (.wrap): one margin left and right, 64-120px on a desktop, 16-24px on a phone",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "container-edges"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > main.main > div.content-wrap \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+   ]
+  },
+  {
+   "check": "container-edges",
+   "where": "div#root \"TENDERGRAPHInvestigateWorkspaceNetworkCo\"",
+   "msg": "a <div> at the top of the page, outside header.nav, main, footer.closing and nav.actionbar (SR-6)",
+   "fix": "build the page as header.nav, a main of sections (each one in-flow .wrap plus background layers) and footer.closing",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "container-edges"
+   ],
+   "wheres": [
+    "div#root \"TENDERGRAPHInvestigateWorkspaceNetworkCo\""
+   ]
+  },
+  {
+   "check": "container-edges",
+   "where": "div.app-shell > main.main > div.content-wrap > div.hero \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\"",
+   "msg": "a box over half the container wide runs 48-1108px, not on the container's lines at 48-1392px (SR-6)",
+   "fix": "run the picture or box from the container's left line to its right line, or put it in a row or a split",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "container-edges"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.hero \"TENDERGRAPH / INVESTIGATION WORKSPACEFol\""
+   ]
+  },
+  {
+   "check": "row-lines",
+   "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\"",
+   "msg": "a row of 3 items: its last item ends at 1368px, the container's right line at 1392px (2px either way) (SR-7)",
+   "fix": "start the row's first item on the container's left line and end its last on the right line, every item one height",
+   "widths": [
+    1440
+   ],
+   "from": "consistency",
+   "ids": [
+    "row-lines"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.principles \"01ObservedParticipant records, tender fa\""
+   ]
+  },
+  {
+   "check": "flush",
+   "where": "main.main > div.content-wrap > div.section-head > span.quiet \"A bounded workspace for evidence-backed \"",
+   "msg": "its last line sits 2px above the rule on top of div.principles",
+   "fix": "give the section its padding at the edge where the ground changes (the closing call keeps a clear gap above the footer)",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "flush"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > div.section-head > span.quiet \"A bounded workspace for evidence-backed \""
+   ]
+  },
+  {
+   "check": "nav",
+   "where": "div#root > div.app-shell > aside.rail > nav",
+   "msg": "the nav has no bar, and its pieces sit past the content's edges (18-431px against 18-372px)",
+   "fix": "make the nav one bar from the content's left edge to its right edge, with every link and action inside it",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "nav"
+   ],
+   "wheres": [
+    "div#root > div.app-shell > aside.rail > nav"
+   ]
+  },
+  {
+   "check": "no-visual",
+   "where": "div.app-shell > main.main > div.content-wrap > div.hero \"Follow the evidence.\"",
+   "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+   "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "no-visual"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.hero \"Follow the evidence.\""
+   ]
+  },
+  {
+   "check": "no-visual",
+   "where": "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\"",
+   "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+   "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "no-visual"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.entry-grid \"Start with a record Search a company, bi\""
+   ]
+  },
+  {
+   "check": "no-visual",
+   "where": "div.app-shell > main.main > div.content-wrap > div.principles \"01 Observed Participant records, tender \"",
+   "msg": "no picture, effect or mock in this section; a feature section needs a visual",
+   "fix": "give the section a visual: a UI fragment on a ground, real icons, or a photograph that fits",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "no-visual"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.principles \"01 Observed Participant records, tender \""
+   ]
+  },
+  {
+   "check": "text-only",
+   "where": "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\"",
+   "msg": "the closing section is only text: no picture, icon, mock or effect in it",
+   "fix": "give the section a visual: a photograph that fits, the real icons, or a UI fragment on a ground",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-only"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > section.availability \"Available to investigate\""
+   ]
+  },
+  {
+   "check": "off-grid",
+   "where": "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\"",
+   "msg": "left edge at 36px, 18px off the page margin at 18px (23 elements, like button.entry-card.primary)",
+   "fix": "move it onto the page margin, or the column edge its section uses",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "off-grid"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\""
+   ]
+  },
+  {
+   "check": "text-contrast",
+   "where": "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\"",
+   "msg": "a caption, label or muted line in #71808b on #f4f6f4 reads 3.75:1 (needs 4.5:1); 2 like it, like \"A bounded workspace fo\"",
+   "fix": "body text in the ink at 7:1 or more; grey (4.5:1 or more) only for captions and labels",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "text-contrast"
+   ],
+   "wheres": [
+    "main.main > div.content-wrap > div.hero > div.hero-note \"Source facts are not conclusions. Candid\""
+   ]
+  },
+  {
+   "check": "section-gaps",
+   "where": "div.app-shell > main.main > div.content-wrap > div.principles / div.app-shell > main.main > div.content-wrap > section.availability",
+   "msg": "122px between these sections, +100% against the median 61px",
+   "fix": "use one gap between sections (all within 25% of each other)",
+   "widths": [
+    390
+   ],
+   "from": "consistency",
+   "ids": [
+    "section-gaps"
+   ],
+   "wheres": [
+    "div.app-shell > main.main > div.content-wrap > div.principles / div.app-shell > main.main > div.content-wrap > section.availability"
+   ]
+  },
+  {
+   "check": "container",
+   "where": "page",
+   "msg": "no .wrap",
+   "fix": "put the content in one .wrap",
+   "widths": [
+    1440,
+    390
+   ],
+   "from": "layout",
+   "ids": [
+    "container"
+   ],
+   "wheres": [
+    "page"
+   ]
+  }
+ ],
+ "waived": [],
+ "warnCount": 11,
+ "at": "2026-11-15T05:31:46.165Z"
+}

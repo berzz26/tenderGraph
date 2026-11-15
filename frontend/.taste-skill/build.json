@@ -1,0 +1,11 @@
+{
+ "page": null,
+ "url": "http://localhost:5174/",
+ "root": null,
+ "kind": "software",
+ "category": "procurement investigation workspace",
+ "primary": "Find a company or bidder",
+ "rounds": 3,
+ "start": "2026-11-15T05:29:31.722Z",
+ "by": "gate.mjs --start"
+}

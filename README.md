@@ -1,217 +1,164 @@
 # TenderGraph
 
-TenderGraph is a PostgreSQL-to-HydraDB procurement intelligence projection.
-PostgreSQL remains the authoritative source; HydraDB stores a deterministic,
-rebuildable graph projection for procurement structure, provenance and bounded
-network queries.
+### Turning fragmented public procurement records into connected investigations.
 
-The repository contains:
+India's public procurement system records how government departments, ministries, public sector undertakings and autonomous bodies spend public funds on goods, services and infrastructure works. Through platforms such as the Central Public Procurement Portal (CPPP), GeM and government e-procurement systems, the process generates records around **procuring organisations, tenders, bidders, submitted bids, technical and financial evaluations, contract awards, vendors and contract values**. 
 
-- A Go 1.22 API in 'api/' using pgx/v5 and the standard HTTP library.
-- A React/Vite investigation workspace in 'frontend/' for bidder, company, tender and analyst-review workflows.
-- HydraDB integration in 'api/internal/graph/'.
-- Projection primitives in 'api/internal/projection/'.
-- The bounded synchronization engine in 'api/internal/ingest/'.
-- Operational CLIs in 'api/cmd/graphproject/' and 'api/cmd/graphsync/'.
+However, procurement records are spread across organisations, portals and individual tender transactions. They do not provide investigators with a unified relationship view connecting the same bidders across tenders, recurring competition patterns or potential links between vendors and corporate entities. <Cite refs={["turn904018search0","turn904018search13","turn904018search12"]}/>
 
-The dashboard is not required to run ingestion and is not rebuilt in the
-current ingestion phase.
+**TenderGraph** addresses this analytical gap by using **HydraDB as its core graph engine** to connect fragmented procurement records into an explorable relationship network. Instead of treating every tender as an isolated transaction, HydraDB models the relationships between bidders, tenders, participation records, awards and corporate entities, enabling investigators to traverse connections across multiple procurement events. 
+Users can identify recurring co-bidding patterns, examine how frequently bidders compete against one another, trace award relationships and explore potential corporate connections. Every observed relationship retains a link to its underlying source records, allowing investigators to move from a discovered pattern to the evidence behind it.
 
-## Architecture
+Built for **procurement auditors, vigilance and oversight teams, investigative journalists and public procurement researchers**, TenderGraph helps turn fragmented transaction records into evidence-backed investigative leads. It does not automatically declare fraud or collusion; it helps investigators discover patterns, examine the supporting evidence and decide what warrants further scrutiny.
 
-~~~text
-PostgreSQL source tables
-        |
-        | read-only, keyset-paginated scans
-        v
-TenderGraph projection primitives
-        |
-        | deterministic node/relationship MERGE batches
-        v
-HydraDB projection
-        |
-        +--> graph reads and reconciliation
+## 1. The scale of procurement intelligence
 
-PostgreSQL tg_* control tables
-        ^
-        |
-watermarks, runs, batches and reconciliation records
-~~~
+We built a large-scale public procurement data collection pipelines from the ground up, 
+Within just **24 hours, we collected over 26,000 tenders**, along with bidder participation, BOQ line items, award records and related procurement data. 
 
-The pipeline is sequential per HydraDB cell. It uses no Kafka, RabbitMQ, Redis,
-second graph database or separate vector database. PostgreSQL pgvector remains
-the semantic-similarity system.
+These records were normalized into a unified PostgreSQL dataset, then projected into **HydraDB**, which powers TenderGraph's relationship network and graph-based investigations. The collection process continues to evolve through an iterative feedback loop, using data-quality findings and gaps identified during analysis to improve subsequent extraction, coverage and the underlying graph.
 
-“Full ingestion” means complete projection of the approved graph ontology and
-validated source mappings below, not a copy of every PostgreSQL table.
+Current dataset:
+| Dataset                                       | Records |
+| --------------------------------------------- | ------: |
+| Tenders                                       |  26,125 |
+| Bidder participation records                  |  22,865 |
+| BOQ line items                                | 356,048 |
+| Co-bidding observations                       |  78,201 |
+| Named bidder pairs with shared tender history |  56,249 |
+| Award records                                 |  20,329 |
+| Evidence-backed winner relationships          |   3,927 |
+| Corporate entities                            |   5,973 |
+| Vendor–corporate GSTIN matches                |      45 |
 
-## Graph coverage
+### From records to investigative leads
 
-The approved ingestion registry currently contains:
+When undergone analysis with tendergraph, we identified an 11-bidder recurring cluster in Department of Posts procurement.
 
-| Dataset | Graph projection | Cursor |
-|---|---|---|
-| 'contractor_v2' | Vendor nodes | 'updated_at, id' |
-| 'entities' | CorporateEntity nodes | 'updated_at, id' |
-| 'entity_aliases' | Alias nodes and HAS_ALIAS edges | 'created_at, id' |
-| 'entity_gst' | GstRegistration nodes and HAS_GST_REGISTRATION edges | 'updated_at, id' |
-| 'tenders' | Tender, GovernmentOrganization, ISSUED_BY, CONTRACTOR_ON_RECORD | 'updated_at, id' |
-| 'tender_participants' | Bid, SUBMITTED_BID and CoBidObservation graph | 'updated_at, id' |
-| 'tender_extracted_meta' | Award, HAS_AWARD and evidence-backed WON edges | 'updated_at, id' |
+Across 195 participant-covered awarded tenders involving this group, its members won 95 awards. One bidder had 14 recorded wins where its own bid, the field minimum and the awarded value matched exactly.
 
-Important semantics:
+The analysis found a statistically significant association between bidder participation and winning outcomes (χ² = 29.8, p = 0.00091).
 
-- 'CONTRACTOR_ON_RECORD' is not bid participation.
-- Actual participation comes from 'tender_participants'.
-- 'is_winner' alone never creates 'WON'.
-- Co-bidding is represented by per-tender 'CoBidObservation' nodes.
-- GSTIN and names create candidate evidence only; no identity is confirmed
-  automatically.
-- Every node and relationship retains source provenance.
+These observations provide a concrete starting point for investigation. 
 
-Excluded datasets include seller identity modeling, tender files/text,
-financial statements, market prices, BOQ intelligence and empty/schema-only
-tables. Their reasons are documented in the Phase 0 audit and Phase 3 report.
+2\. The HydraDB graph investigation engine
 
-Secrets are never committed or logged. The Phase 3 migration is additive and
-creates only 'tg_*' control-plane tables.
+Procurement relationships do not exist in isolation. A bidder participates in multiple tenders, encounters other bidders, appears in award records and may have potential links to corporate entities.
 
-## Synchronization CLI
+TenderGraph models these relationships explicitly in HydraDB.
 
-Run commands from 'api/'.
+Rather than treating each tender as an isolated record, the graph makes it possible to follow connections across procurement activity and inspect the evidence behind each relationship.
 
-Inspect the registry:
+### Graph model
 
-~~~sh
-go run ./cmd/graphsync -op list
-~~~
+```mermaid
+graph TD
+    B1[Bidder A] --> C1[Co-bidding observation]
+    B2[Bidder B] --> C1
+    B1 --> T1[Tender 1]
+    B2 --> T1
+    B1 --> T2[Tender 2]
+    B3[Bidder C] --> T2
+    T1 --> A1[Award 1]
+    T2 --> A2[Award 2]
+    V[Vendor] -->|Candidate identity| E[Corporate entity]
+```
 
-Preview a selected dataset without graph or control-plane writes:
+A co-bidding observation is represented as its own graph node, connected to the two bidder records. This preserves the tender-specific context of the relationship rather than creating an unsupported direct connection between companies.
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -dataset contractor_v2 -dry-run
-~~~
+### What HydraDB enables
 
-Run the complete initial projection in dependency order:
+- **Multi-hop investigation:** traverse bidder relationships across multiple shared tenders.
+- **Recurring relationship discovery:** identify bidders connected through repeated procurement observations.
+- **Pair investigation:** inspect shared tender history, overlap and directional coverage.
+- **Path discovery:** find bounded paths between bidders and other graph entities.
+- **Evidence traversal:** follow graph relationships back to their source tenders, participant records and awards.
+- **Corporate relationship exploration:** inspect potential vendor-to-company links without treating unverified matches as confirmed identities.
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -batch-size 500 -verify
-~~~
+### Graph performance
 
-Run one dataset:
+Benchmark results across six investigation workloads, comparing native HydraDB queries, PostgreSQL queries and the Go application. Each workload was run for 30 samples; figures below are warm p50 latency.
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op initial -dataset tenders -batch-size 500
-~~~
+| Investigation workload | PostgreSQL | HydraDB |
+| --- | ---: | ---: | ---: |
+| One-hop co-bidders | 77.43 ms | 1.179 ms | 
+| Multi-hop, depth 2 | 45.10 ms | 2.282 ms | 
+| Multi-hop, depth 3 | 45.08 ms | 4.359 ms | 
+| Pair co-bidding history | 77.12 ms | 0.079 ms | 
+| Corporate GST registrations | 62.49 ms | 0.225 ms |
 
-Run incremental synchronization. Mutable datasets use a bounded one-hour
-lookback and a compound timestamp/primary-key cursor; replay is intentional and
-idempotent:
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op incremental
-~~~
+everything here was ran on a home server having mere 8 gigs of ram and a 4 core 4 thread ryzen 3 3200g processor.
 
-Retry a failed dataset from its durable checkpoint:
+### Why HydraDB?
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op retry -dataset tender_participants
-~~~
+A procurement investigation often requires following relationships that span multiple tenders and bidders.
 
-Inspect durable state:
+HydraDB provides a native graph execution layer for these investigations:
 
-~~~sh
-go run ./cmd/graphsync -op status
-go run ./cmd/graphsync -op failed -dataset tender_participants
-~~~
+1. Start with a bidder.
+2. Traverse its shared tender observations.
+3. Discover other bidders connected through multiple tenders.
+4. Follow those bidders into additional procurement relationships.
+5. Inspect the tender and award evidence behind every connection.
+6. Identify a pattern that was not obvious from an individual tender record.
 
-Reconcile without deleting anything:
+The graph is not simply a visualization layer. It represents the relationship structure used by the investigation engine.
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op reconcile -dataset tender_participants -reconcile-mode detect
-~~~
+## 3. Core implementation
 
-Repair is explicit. It replays the selected dataset; stale graph records are
-reported but are not automatically deleted:
+### Data architecture
 
-~~~sh
-HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token go run ./cmd/graphsync -op repair -dataset tender_participants
-~~~
+```mermaid
+flowchart TD
+    P[PostgreSQL source records] --> G[Go projection and synchronization]
+    G --> H[HydraDB relationship graph]
+    H --> I[Graph investigation engine]
+    I --> API[Go API]
+    API --> UI[React investigation workspace]
+    UI --> R[Analyst review]
+    R --> D[Decision history and feedback]
+```
 
-The Phase 2 vertical-slice tool remains available:
+**PostgreSQL — source of truth**
 
-~~~sh
-go run ./cmd/graphproject -tender-id 16234
-~~~
+Stores original procurement records, bidder participation, awards, BOQ data, corporate financial information and analyst decisions. Original source records are not modified to construct the graph.
 
-## Investigation workspace
+**Go — projection and investigation orchestration**
 
-Run the API:
+Handles deterministic graph projection, synchronization, candidate generation, investigation logic, graph algorithm execution and API responses.
 
-~~~sh
-cd api
-go run .
-~~~
+**HydraDB — relationship engine**
 
-Run the frontend in development:
+Stores the rebuildable procurement graph and supports native relationship traversal, bounded path discovery and graph algorithms.
 
-~~~sh
-cd frontend
-npm install
-npm run dev
-~~~
+**React — investigation workspace**
 
-The Vite development server proxies '/api' to port 8091. Build output is served
-by the Go API when 'frontend/dist' exists:
+Provides bidder search, network exploration, tender and company intelligence, evidence inspection and analyst review.
 
-~~~sh
-cd frontend
-npm run build
-cd ../api
-go run .
-~~~
+### Projection and provenance
 
-The primary workspace routes are `#!/workspace`, `#!/bidder/<bid-id>`,
-`#!/company/<entity-id>`, `#!/tender/<external-tender-id>` and `#!/review`.
-The backend investigative API is documented in
-'docs/phase8/PHASE_8_REPORT.md'.
+Selected PostgreSQL records are projected into deterministic graph entities and relationships. Stable identifiers allow the graph to be rebuilt from source data.
 
-## Tests
+Relationships preserve their source references and derivation context. Candidate identity matches remain distinct from analyst-confirmed relationships.
 
-Unit/build checks:
+The graph includes:
 
-~~~sh
-cd api
-go test ./...
-go vet ./...
-~~~
+- Tender and bidder entities.
+- Shared tender observations.
+- Vendor and corporate entities.
+- Award relationships.
+- Government organization relationships.
+- GST registration and alias relationships.
 
-Live integration checks require the development HydraDB token and PostgreSQL
-connection:
+### Analyst feedback loop
 
-~~~sh
-cd api
-set -a
-. .env
-set +a
-export HYDRADB_AUTH_TOKEN_FILE=/path/to/auth-token
-go test -tags integration ./...
-~~~
+Analysts can review potential relationships, record decisions and provide evidence-backed feedback. Decisions are versioned and retained in an append-only history.
 
-Graph integration tests use bounded disposable probe records where cleanup is
-appropriate; ingestion recovery tests use approved projection records and do
-not delete the graph projection. No integration test modifies PostgreSQL
-source tables.
+These decisions form the foundation for a versioned candidate-ranking system.
 
-## Documentation
+The current implementation provides analyst feedback infrastructure. Measured ranking improvement will be reported only after genuine analyst labels and held-out evaluation are available.
 
-- Phase 0 audit and ontology: 'docs/phase0/'
-- HydraDB application integration: 'docs/phase1/PHASE_1B_REPORT.md'
-- Projection foundation: 'docs/phase2/PHASE_2_REPORT.md'
-- Full ingestion and synchronization: 'docs/phase3/PHASE_3_REPORT.md'
-- Control-plane migration: 'api/migrations/002_tendergraph_sync.sql'
+---
 
-The HydraDB compatibility documents distinguish verified runtime behavior from
-documentation-only or still-unverified assumptions. In particular, the
-verified replay form is batch relationship 'MERGE' with a deterministic
-relationship id; relationship 'CREATE' is not used for replay-safe writes.
+**TenderGraph turns fragmented procurement records into connected, traceable investigations — helping analysts move from individual transactions to relationships worth examining.**

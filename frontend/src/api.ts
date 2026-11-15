@@ -25,7 +25,16 @@ async function get<T = any>(path: string, params: Record<string, any> = {}): Pro
     }
     throw new Error(msg);
   }
-  return (await res.json()) as T;
+  const payload = await res.json();
+  // Keep the current investigation components compatible with the workspace
+  // response shape while the API exposes the more explicit selected_bid name.
+  if (path.startsWith('bidders/') && payload?.data?.selected_bid && !payload.data.bid) {
+    payload.data.bid = {
+      ...payload.data.selected_bid,
+      name: payload.data.selected_bid.name || payload.data.selected_bid.participant_name,
+    };
+  }
+  return payload as T;
 }
 
 async function post<T = any>(path: string, body: any): Promise<T> {
