@@ -131,11 +131,31 @@ type TenderAnalysis struct {
 }
 
 type NetworkNode struct {
-	BidID       int64  `json:"bid_id"`
-	BidGID      string `json:"bid_gid"`
-	ObservedKey string `json:"observed_participant_key"`
-	Name        string `json:"participant_name"`
-	Depth       int    `json:"depth"`
+	BidID          int64  `json:"bid_id"`
+	BidGID         string `json:"bid_gid"`
+	NodeID         string `json:"node_id"`
+	GID            string `json:"gid"`
+	NodeType       string `json:"node_type"`
+	ObservedKey    string `json:"observed_participant_key,omitempty"`
+	Name           string `json:"participant_name,omitempty"`
+	Depth          int    `json:"depth"`
+	SourceTable    string `json:"source_table,omitempty"`
+	SourcePK       string `json:"source_pk,omitempty"`
+	TenderID       int64  `json:"tender_id,omitempty"`
+	TenderGID      string `json:"tender_gid,omitempty"`
+	ExternalTender string `json:"external_tender_id,omitempty"`
+}
+
+type NetworkEdge struct {
+	EdgeID         string     `json:"edge_id"`
+	Source         string     `json:"source"`
+	Target         string     `json:"target"`
+	Type           string     `json:"type"`
+	Label          string     `json:"label"`
+	ObservationGID string     `json:"observation_gid,omitempty"`
+	TenderID       int64      `json:"tender_id,omitempty"`
+	TenderGID      string     `json:"tender_gid,omitempty"`
+	Evidence       []Evidence `json:"evidence,omitempty"`
 }
 
 type Network struct {
@@ -143,6 +163,8 @@ type Network struct {
 	Depth     int           `json:"depth"`
 	Limit     int           `json:"limit"`
 	Nodes     []NetworkNode `json:"nodes"`
+	Edges     []NetworkEdge `json:"edges"`
+	Truncated bool          `json:"truncated"`
 	Method    string        `json:"method"`
 }
 
@@ -544,23 +566,35 @@ func (s Service) Network(ctx context.Context, bidID int64, depth, limit int) (Ne
 	if limit <= 0 {
 		limit = defaultLimit
 	}
-	out := Network{RootBidID: bidID, Depth: depth, Limit: limit, Nodes: []NetworkNode{}, Method: "bounded breadth-first HydraDB CO_BID_IN traversal; no unrestricted path expansion"}
+	root, err := s.loadBid(ctx, bidID)
+	if err != nil {
+		return Network{}, err
+	}
+	rootName := root.Name
+	if rootName == "" {
+		rootName = fmt.Sprintf("Participant record #%d", bidID)
+	}
+	rootGID := root.GID
+	out := Network{RootBidID: bidID, Depth: depth, Limit: limit, Nodes: []NetworkNode{{BidID: bidID, BidGID: rootGID, NodeID: fmt.Sprint(bidID), GID: rootGID, NodeType: "Bid", Name: rootName, ObservedKey: root.ObservedKey, Depth: 0, SourceTable: "tender_participants", SourcePK: fmt.Sprint(bidID), TenderID: root.TenderID, TenderGID: root.TenderGID}}, Edges: []NetworkEdge{}, Method: "bounded breadth-first HydraDB CO_BID_IN traversal with tender-specific CoBidObservation evidence; no unrestricted path expansion"}
 	seen := map[int64]bool{bidID: true}
 	frontier := []int64{bidID}
+	parent := map[int64]int64{}
 	for d := 1; d <= depth && len(out.Nodes) < limit; d++ {
 		var next []int64
 		for _, id := range frontier {
-			ids, err := s.directCoBidders(ctx, id, limit-len(out.Nodes))
-			if err != nil {
-				return out, err
+			ids, e := s.directCoBidders(ctx, id, limit-len(out.Nodes))
+			if e != nil {
+				return out, e
 			}
 			for _, nid := range ids {
 				if seen[nid] {
 					continue
 				}
 				seen[nid] = true
+				parent[nid] = id
 				next = append(next, nid)
-				out.Nodes = append(out.Nodes, NetworkNode{BidID: nid, BidGID: projection.GID("BID", "v", fmt.Sprint(nid)), Depth: d})
+				gid := projection.GID("BID", "v", fmt.Sprint(nid))
+				out.Nodes = append(out.Nodes, NetworkNode{BidID: nid, BidGID: gid, NodeID: fmt.Sprint(nid), GID: gid, NodeType: "Bid", Depth: d, SourceTable: "tender_participants", SourcePK: fmt.Sprint(nid)})
 				if len(out.Nodes) >= limit {
 					break
 				}
@@ -574,29 +608,98 @@ func (s Service) Network(ctx context.Context, bidID int64, depth, limit int) (Ne
 			break
 		}
 	}
-	if len(out.Nodes) > 0 {
-		ids := make([]int64, len(out.Nodes))
-		for i := range out.Nodes {
-			ids[i] = out.Nodes[i].BidID
+	if len(out.Nodes) >= limit && len(frontier) > 0 {
+		out.Truncated = true
+	}
+	ids := make([]int64, 0, len(out.Nodes))
+	for _, n := range out.Nodes {
+		if n.NodeType == "Bid" {
+			ids = append(ids, n.BidID)
 		}
-		rows, err := s.Pool.Query(ctx, `SELECT id::bigint,COALESCE(participant_name,''),COALESCE(participant_normalized,'') FROM tender_participants WHERE id=ANY($1::bigint[])`, ids)
-		if err == nil {
-			for rows.Next() {
-				var id int64
-				var name, key string
-				if rows.Scan(&id, &name, &key) == nil {
-					for i := range out.Nodes {
-						if out.Nodes[i].BidID == id {
-							out.Nodes[i].Name = name
-							out.Nodes[i].ObservedKey = key
+	}
+	rows, e := s.Pool.Query(ctx, `SELECT id::bigint,COALESCE(participant_name,''),COALESCE(participant_normalized,''),tender_id::bigint FROM tender_participants WHERE id=ANY($1::bigint[])`, ids)
+	if e == nil {
+		for rows.Next() {
+			var id, tenderID int64
+			var name, key string
+			if rows.Scan(&id, &name, &key, &tenderID) == nil {
+				for i := range out.Nodes {
+					if out.Nodes[i].BidID == id {
+						out.Nodes[i].Name = name
+						if out.Nodes[i].Name == "" {
+							out.Nodes[i].Name = fmt.Sprintf("Participant record #%d", id)
 						}
+						out.Nodes[i].ObservedKey = key
+						out.Nodes[i].TenderID = tenderID
+						out.Nodes[i].TenderGID = projection.GID("TENDER", "v", fmt.Sprint(tenderID))
 					}
 				}
 			}
-			rows.Close()
+		}
+		rows.Close()
+	}
+	for child, from := range parent {
+		shared, e := s.sharedTendersByBidIDs(ctx, from, child, 20)
+		if e != nil {
+			continue
+		}
+		for _, tender := range shared {
+			obs := projection.GID("COBID", "v", fmt.Sprintf("%d:%d:%d", tender.TenderID, minInt64(from, child), maxInt64(from, child)))
+			if !containsNetworkNode(out.Nodes, obs) {
+				out.Nodes = append(out.Nodes, NetworkNode{NodeID: obs, GID: obs, NodeType: "CoBidObservation", Name: tender.ExternalTender, Depth: tenderDepth(out.Nodes, child), SourceTable: "tender_participants", SourcePK: fmt.Sprintf("%d,%d", from, child), TenderID: tender.TenderID, TenderGID: tender.TenderGID, ExternalTender: tender.ExternalTender})
+			}
+			out.Edges = append(out.Edges, NetworkEdge{EdgeID: obs + ":" + fmt.Sprint(from), Source: fmt.Sprint(from), Target: obs, Type: "CO_BID_IN", Label: "observed in shared tender", ObservationGID: obs, TenderID: tender.TenderID, TenderGID: tender.TenderGID, Evidence: tender.Evidence}, NetworkEdge{EdgeID: obs + ":" + fmt.Sprint(child), Source: fmt.Sprint(child), Target: obs, Type: "CO_BID_IN", Label: "observed in shared tender", ObservationGID: obs, TenderID: tender.TenderID, TenderGID: tender.TenderGID, Evidence: tender.Evidence})
 		}
 	}
 	return out, nil
+}
+
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+func containsNetworkNode(nodes []NetworkNode, gid string) bool {
+	for _, n := range nodes {
+		if n.GID == gid {
+			return true
+		}
+	}
+	return false
+}
+func tenderDepth(nodes []NetworkNode, bidID int64) int {
+	for _, n := range nodes {
+		if n.BidID == bidID {
+			return n.Depth
+		}
+	}
+	return 1
+}
+func (s Service) sharedTendersByBidIDs(ctx context.Context, leftID, rightID int64, limit int) ([]SharedTender, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT t.id::bigint,t.tender_id,COALESCE(t.organization,''),MAX(COALESCE(a.submitted_date,t.created_at)),a.id::bigint,b.id::bigint FROM tenders t JOIN tender_participants a ON a.tender_id=t.id AND a.id=$1 JOIN tender_participants b ON b.tender_id=t.id AND b.id=$2 GROUP BY t.id,t.tender_id,t.organization,a.id,b.id ORDER BY t.id LIMIT $3`, leftID, rightID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SharedTender
+	for rows.Next() {
+		var st SharedTender
+		var leftBid, rightBid int64
+		if err := rows.Scan(&st.TenderID, &st.ExternalTender, &st.Organization, &st.ObservedAt, &leftBid, &rightBid); err != nil {
+			return nil, err
+		}
+		st.TenderGID = projection.GID("TENDER", "v", fmt.Sprint(st.TenderID))
+		st.Evidence = []Evidence{{SourceTable: "tender_participants", SourcePK: fmt.Sprint(leftBid), GID: projection.GID("BID", "v", fmt.Sprint(leftBid))}, {SourceTable: "tender_participants", SourcePK: fmt.Sprint(rightBid), GID: projection.GID("BID", "v", fmt.Sprint(rightBid))}, {SourceTable: "tenders", SourcePK: fmt.Sprint(st.TenderID), GID: st.TenderGID}}
+		out = append(out, st)
+	}
+	return out, rows.Err()
 }
 
 // StableKeys is useful to callers that need deterministic result ordering.
