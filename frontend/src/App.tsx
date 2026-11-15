@@ -12,6 +12,7 @@ import {
   Network,
   Search,
 } from "lucide-react";
+import { Analytics } from "@vercel/analytics/react";
 
 type Route = { page: string; id?: string };
 const getRoute = (): Route => {
@@ -1525,7 +1526,12 @@ export default function App() {
     ) : (
       <WorkspaceReference />
     );
-  return <Shell>{p}</Shell>;
+  return (
+    <>
+      <Shell>{p}</Shell>
+      <Analytics />
+    </>
+  );
 }
 
 function HeroSearch() {
