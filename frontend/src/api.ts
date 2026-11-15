@@ -7,6 +7,22 @@ export type ListResp = {
   offset: number;
 };
 
+// Set VITE_BACKEND_API to the backend origin, for example:
+// VITE_BACKEND_API=http://localhost:8091
+// An empty value keeps same-origin deployments working through /api.
+// In Vite development, use the same-origin /api proxy. This avoids browser
+// CORS and IPv4/IPv6 localhost differences; vite.config.ts forwards it to the
+// configured VITE_BACKEND_API origin. Production builds can use the configured
+// origin directly, or same-origin /api when the API serves the frontend.
+const backendOrigin = import.meta.env.DEV
+  ? ""
+  : String(import.meta.env.VITE_BACKEND_API || "").replace(/\/+$/, "");
+const apiPrefix = `${backendOrigin}/api/v1`;
+
+export function apiURL(path: string): string {
+  return `${apiPrefix}/${path.replace(/^\/+/, "")}`;
+}
+
 async function get<T = any>(path: string, params: Record<string, any> = {}): Promise<T> {
   const usp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -14,7 +30,7 @@ async function get<T = any>(path: string, params: Record<string, any> = {}): Pro
     usp.set(k, String(v));
   }
   const qs = usp.toString();
-  const res = await fetch(`/api/v1/${path}${qs ? '?' + qs : ''}`);
+  const res = await fetch(`${apiURL(path)}${qs ? '?' + qs : ''}`);
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
@@ -38,7 +54,7 @@ async function get<T = any>(path: string, params: Record<string, any> = {}): Pro
 }
 
 async function post<T = any>(path: string, body: any): Promise<T> {
-  const res = await fetch(`/api/v1/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(apiURL(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { let msg = `HTTP ${res.status}`; try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* ignore */ } throw new Error(msg); }
   return await res.json() as T;
 }

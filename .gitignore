@@ -7,3 +7,4 @@ api/vyuha-api
 /docs
 *.png
 *.jpg
+frontend/.env

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtCr, fmtDate, fmtInt, str, methodLabel } from '../api';
+import { api, apiURL, fmtCr, fmtDate, fmtInt, str, methodLabel } from '../api';
 import { Section, Badge, Empty, Loader, ErrorBanner, TenderLink } from '../components/ui';
 import { DataTable, type Col } from '../components/DataTable';
 
@@ -256,7 +256,7 @@ const participantCols: Col[] = [
 ];
 
 const fileCols = (tenderId: string): Col[] => [
-  { key: 'file_name', label: 'File name', render: (r) => <a className="tender-link mono" href={`/api/v1/tenders/${encodeURIComponent(tenderId)}/files/${encodeURIComponent(String(r.id))}/download`} onClick={async (event) => { event.preventDefault(); try { const result = await api.get<{ url: string }>(`tenders/${encodeURIComponent(tenderId)}/files/${encodeURIComponent(String(r.id))}/download`); window.location.assign(result.url); } catch (error: any) { window.alert(error?.message || 'Unable to prepare download'); } }} download>{str(r.file_name)}</a>, csv: (r) => str(r.file_name) },
+  { key: 'file_name', label: 'File name', render: (r) => <a className="tender-link mono" href={apiURL(`tenders/${encodeURIComponent(tenderId)}/files/${encodeURIComponent(String(r.id))}/download`)} onClick={async (event) => { event.preventDefault(); try { const result = await api.get<{ url: string }>(`tenders/${encodeURIComponent(tenderId)}/files/${encodeURIComponent(String(r.id))}/download`); window.location.assign(result.url); } catch (error: any) { window.alert(error?.message || 'Unable to prepare download'); } }} download>{str(r.file_name)}</a>, csv: (r) => str(r.file_name) },
   { key: 'file_type', label: 'Type', csv: (r) => str(r.file_type) },
   { key: 'file_extension', label: 'Ext', csv: (r) => str(r.file_extension) },
   { key: 'file_size_mb', label: 'Size (MB)', align: 'right', render: (r) => (r.file_size_mb == null ? '-' : Number(r.file_size_mb).toFixed(2)) },
