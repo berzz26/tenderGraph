@@ -2,6 +2,10 @@
 
 ### Turning fragmented public procurement records into connected investigations.
 
+India's public procurement system records how government departments, ministries, public sector undertakings and autonomous bodies spend public funds on goods, services and infrastructure works. Through platforms such as the Central Public Procurement Portal (CPPP), GeM and government e-procurement systems, the process generates records around **procuring organisations, tenders, bidders, submitted bids, technical and financial evaluations, contract awards, vendors and contract values**. 
+
+However, procurement records are spread across organisations, portals and individual tender transactions. They do not provide investigators with a unified relationship view connecting the same bidders across tenders, recurring competition patterns or potential links between vendors and corporate entities. <Cite refs={["turn904018search0","turn904018search13","turn904018search12"]}/>
+
 
 <table>
   <tr>
@@ -14,10 +18,6 @@
   </tr>
 </table>
 
-
-India's public procurement system records how government departments, ministries, public sector undertakings and autonomous bodies spend public funds on goods, services and infrastructure works. Through platforms such as the Central Public Procurement Portal (CPPP), GeM and government e-procurement systems, the process generates records around **procuring organisations, tenders, bidders, submitted bids, technical and financial evaluations, contract awards, vendors and contract values**. 
-
-However, procurement records are spread across organisations, portals and individual tender transactions. They do not provide investigators with a unified relationship view connecting the same bidders across tenders, recurring competition patterns or potential links between vendors and corporate entities. <Cite refs={["turn904018search0","turn904018search13","turn904018search12"]}/>
 
 **TenderGraph** addresses this analytical gap by using **HydraDB as its core graph engine** to connect fragmented procurement records into an explorable relationship network. Instead of treating every tender as an isolated transaction, HydraDB models the relationships between bidders, tenders, participation records, awards and corporate entities, enabling investigators to traverse connections across multiple procurement events. 
 Users can identify recurring co-bidding patterns, examine how frequently bidders compete against one another, trace award relationships and explore potential corporate connections. Every observed relationship retains a link to its underlying source records, allowing investigators to move from a discovered pattern to the evidence behind it.
