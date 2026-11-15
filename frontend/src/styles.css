@@ -28,6 +28,9 @@
 .notable-intro{margin:22px auto 20px;max-width:1280px}
 .notable-list{max-width:1280px;margin:0 auto}
 .notable-note{padding:14px 16px;border-left:3px solid var(--color-amber);background:var(--color-amber-soft);color:var(--color-ink-soft);font-size:13px}
+.notable-review-link{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px;padding-top:16px;border-top:1px solid var(--color-line);color:var(--color-muted);font-size:13px}
+.ranking-status{max-width:1280px;margin:20px auto}.ranking-status h2{margin:6px 0;font:700 28px var(--font-display)}.ranking-status p{max-width:650px;margin:0;color:var(--color-muted);font-size:13px}.ranking-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin-top:22px;overflow:hidden;border:1px solid var(--color-line);background:var(--color-line)}.ranking-status-grid .fact{background:var(--color-surface)}.ranking-status-note{margin-top:16px;padding:13px 15px;border-left:3px solid var(--color-amber);background:var(--color-amber-soft);color:var(--color-ink-soft);font-size:13px}
+@media(max-width:760px){.notable-review-link{align-items:flex-start;flex-direction:column}.ranking-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .wordmark{font-size:0}.wordmark::after{content:"TenderGraph";font:600 16px var(--font-body);letter-spacing:-.02em;color:var(--color-ink)}.wordmark>span:last-child{display:none}
 .rail nav a{font-size:0}.rail nav a::after{font:500 14px var(--font-body)}.rail nav a[href="#!/workspace"]::after{content:"Explore"}.rail nav a[href="#!/company"]::after{content:"Companies"}.rail nav a[href="#!/tender"]::after{content:"Tenders"}.rail nav a[href="#!/network"]::after{content:"Related bidders"}.rail nav a[href="#!/compare"]::after{content:"Compare"}.rail nav a[href="#!/review"]::after{content:"Review"}
 @media(max-width:760px){.entry-grid{grid-template-columns:1fr;gap:0}.entry-card{min-height:96px}.entry-card small{max-width:240px}}

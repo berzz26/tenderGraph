@@ -1169,6 +1169,12 @@ function NotableBidders() {
           Repeated participation is an observation. It does not establish
           collusion, legal identity or wrongdoing.
         </div>
+        <div className="notable-review-link">
+          <span>Have an analyst decision to record?</span>
+          <button className="button small" onClick={() => go("review")}>
+            Open feedback queue →
+          </button>
+        </div>
       </section>
       <section className="panel notable-list">
         <PanelTitle
@@ -1211,10 +1217,58 @@ function NotableBidders() {
     </>
   );
 }
+function RankingStatusPanel({ status }: { status?: any }) {
+  if (!status)
+    return (
+      <section className="panel ranking-status">
+        <Loading />
+      </section>
+    );
+  return (
+    <section className="panel ranking-status">
+      <div>
+        <div className="kicker">FEEDBACK LOOP</div>
+        <h2>Candidate ranking status</h2>
+        <p>
+          Analyst confirmations and rejections can eventually improve the order
+          in which relationship candidates are presented.
+        </p>
+      </div>
+      <div className="ranking-status-grid">
+        <Fact
+          label="Active ranker"
+          value={status.active_ranker || "Unavailable"}
+          sub={status.baseline_version || ""}
+        />
+        <Fact
+          label="Genuine positive labels"
+          value={fmtInt(status.genuine_positive_labels)}
+        />
+        <Fact
+          label="Genuine negative labels"
+          value={fmtInt(status.genuine_negative_labels)}
+        />
+        <Fact
+          label="Learned model"
+          value={status.ready_for_training ? "Ready" : "Not ready"}
+          sub={status.readiness_reason || ""}
+        />
+      </div>
+      <div className="ranking-status-note">
+        {status.model_promoted
+          ? "A learned ranker is active."
+          : "The baseline ranker is active. No learned model has been promoted."}{" "}
+        Decisions recorded below are stored as analyst assertions; they do not
+        rewrite source records.
+      </div>
+    </section>
+  );
+}
 function Review() {
   const [items, setItems] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>();
   const [msg, setMsg] = useState("");
+  const [ranking, setRanking] = useState<any>();
   const load = () =>
     api
       .get<any>("review/candidates", { status: "PENDING", limit: 50 })
@@ -1222,6 +1276,10 @@ function Review() {
       .catch(() => setItems([]));
   useEffect(() => {
     load();
+    api
+      .get<any>("review/ranking/status")
+      .then((x) => setRanking(x.data))
+      .catch(() => setRanking(undefined));
   }, []);
   const decide = async (status: string) => {
     if (!selected) return;
@@ -1251,6 +1309,7 @@ function Review() {
         title="Review the uncertain edges."
         text="System candidates are hypotheses. Confirming one records an analyst assertion; it does not rewrite the source record."
       />
+      <RankingStatusPanel status={ranking} />
       <>{msg && <div className="notice">{msg}</div>}</>
       <div className="review-layout">
         <section className="panel queue">
